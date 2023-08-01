@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include <arm/armv6-m.dtsi>
+#include <zephyr/dt-bindings/gpio/gpio.h>
 
 / {
 	cpus {
@@ -28,6 +29,24 @@
 	};
 
 	soc {
+		gpioa: gpio@400a0000 {
+			compatible = "ti,mspm0g3xxx-gpio";
+			reg = <0x400a0000 0x2000>;
+			interrupts = <1 0>;
+			status = "disabled";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpiob: gpio@400a2000 {
+			compatible = "ti,mspm0g3xxx-gpio";
+			reg = <0x400a2000 0x2000>;
+			interrupts = <1 0>;
+			status = "disabled";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
 		uart0: uart@40108000 {
 			compatible = "ti,mspm0g3xxx-uart";
 			reg = <0x40108000 0x2000>;
