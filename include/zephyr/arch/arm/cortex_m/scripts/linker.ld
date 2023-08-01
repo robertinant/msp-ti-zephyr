@@ -458,6 +458,9 @@ SECTION_PROLOGUE(.last_section,,)
   /* Fill last section with a word to ensure location counter and actual rom
    * region data usage match. */
   LONG(CONFIG_LINKER_LAST_SECTION_ID_PATTERN)
+#ifdef CONFIG_LINKER_LAST_SECTION_ALIGN_8
+	. = ALIGN(8);
+#endif
 #endif
 } GROUP_LINK_IN(ROMABLE_REGION)
 
