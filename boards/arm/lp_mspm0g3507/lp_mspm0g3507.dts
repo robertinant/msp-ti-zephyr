@@ -68,3 +68,7 @@
 	status = "okay";
 	current-speed = <9600>;
 };
+
+&i2c1 {
+	status = "okay";
+};
