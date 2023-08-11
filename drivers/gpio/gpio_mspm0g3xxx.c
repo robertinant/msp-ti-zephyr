@@ -226,11 +226,7 @@ static bool init_irq = true;
 
 static int gpio_mspm0g3xxx_init(const struct device *dev)
 {
-	/* Should have happened in soc.c */
-	// const struct gpio_mspm0g3xxx_config *config = dev->config;
-	// DL_GPIO_reset(config->base);
-	// DL_GPIO_enablePower(config->base);
-	// delay_cycles(POWER_STARTUP_DELAY);
+	/* Powering up of GPIOs is part of soc.c */
 
 	if (init_irq) {
 

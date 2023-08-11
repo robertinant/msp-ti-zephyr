@@ -35,10 +35,10 @@ Features:
 - Temperature sensor circuit
 - Light sensor circuit
 - External OPA2365 (default buffer mode) for ADC (up to 4 Msps) evaluation
-- Onboard 32.768-kHz and 48-MHz crystals
+- Onboard 32.768-kHz and 40-MHz crystals
 - RC filter for ADC input (unpopulated by default)
 
-Details on the MSPM0G3507 LaunchPad can be found on the MSPM0G3507 LaunchPad `User Guide`_.
+Details on the MSPM0G3507 LaunchPad can be found on the `TI LP_MSPM0G3507 Product Page`_.
 
 Supported Features
 ==================
@@ -60,7 +60,7 @@ The MSPM0G3507 LaunchPad development board configuration supports the following 
 | I2C       | on-chip    | i2c                   |
 +-----------+------------+-----------------------+
 
-More details about the supported peripherals are available in MSPM0G350X TRM.
+More details about the supported peripherals are available in `MSPM0G3507 TRM`_.
 Other hardware features are not currently supported by the Zephyr kernel.
 
 Building and Flashing
@@ -79,7 +79,7 @@ For example, to build the :ref:`hello_world` application for the MSPM0G3507 Laun
    :goals: build
 
 The resulting ``zephyr.bin`` binary in the build directory can be flashed onto
-MSPM0G3507 LaunchPad using the program mentioned below.
+MSPM0G3507 LaunchPad using the steps mentioned below.
 
 Flashing
 ========
@@ -90,16 +90,19 @@ Make sure to select the checkbox for binary loading.
 Debugging
 =========
 
-MSPM0G3507 LaunchPad board supports debugging primarily using `CCS IDE`_. More information
-on debugging using CCS can be found in CCS Debug Handbook.
+The flashing method described above does not include symbols. Thus, debugging requires an additional step to load the symbols.
+This section shows how to debug the MSPM0G3507 LaunchPad board using `CCS IDE`_. More information
+on debugging using CCS can be found in `CCS User's Guide`_.
 
-In general, the steps for debugging in CCS is to:
+In general, the steps for debugging in CCS are:
 
    1. Open CCS
-   2. Launch target configuration using the provided .ccxml file in the lp_mspm0g3507/ directory
-   3. Plug in the device and connect to it
-   4. Go to Run > Load > Load Symbols and load in the zephyr.elf file loaded
-   5. Use CCS to debug 
+   2. Go to Window > Show View > Target Configruation
+   3. Import target confguration by right clicking User Defined, selecting Import target configuration and pointing to the lp_mspm0g3507/support/MSPM0G3507.ccxml
+   4. Launch target configuration by right clicking the new MSPM0G3507.ccxml file and clicking Launch target configuration
+   5. Plug in the device and connect to it by going to Run > Connect Target
+   6. Go to Run > Load > Load Symbols and load in the zephyr.elf file loaded
+   7. Use CCS to debug 
 
 References
 **********
@@ -113,8 +116,14 @@ TI MSPM0G3507 Product Page:
 TI MSPM0 SDK:
    https://www.ti.com/tool/MSPM0-SDK
 
-.. _User Guide:
-   https://www.ti.com/lit/ug/slau873a/slau873a.pdf?ts=1686687008417
+.. _CCS User's Guide:
+   https://software-dl.ti.com/ccs/esd/documents/users_guide/index.html
+
+.. _MSPM0G3507 TRM:
+   https://www.ti.com/lit/slau846
+
+.. _TI LP_MSPM0G3507 Product Page:
+   https://www.ti.com/tool/LP-MSPM0G3507
 
 .. _UniFlash:
    http://processors.wiki.ti.com/index.php/UniFlash_v4_Quick_Guide#Command_Line_Interface
