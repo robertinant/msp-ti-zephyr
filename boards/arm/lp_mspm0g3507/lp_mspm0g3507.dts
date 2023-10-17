@@ -72,3 +72,15 @@
 &i2c1 {
 	status = "okay";
 };
+
+&adc0 {
+	ti,clk-source = <ULPCLK>;
+	ti,clk-divider = <1>;
+	status = "okay";
+};
+
+&adc1 {
+	ti,clk-source = <ULPCLK>;
+	ti,clk-divider = <1>;
+	status = "okay";
+};

@@ -1,0 +1,45 @@
+description: TI MSPM0G3XXX ADC
+
+compatible: "ti,mspm0g3xxx-adc"
+
+include: [adc-controller.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  "#io-channel-cells":
+    const: 1
+  
+  ti,clk-source:
+    type: int
+    required: true
+    enum:
+      - 0 # ULPCLK is the source of ADC sample clock
+      - 1 # SYSOSC is the source of ADC sample clock
+    description: |
+      ADC clock source :
+      - <ULPCLK> : derived from ULPCLK
+      - <SYSOSC> : derived from SYSOSC
+
+  ti,clk-divider:
+    type: int
+    required: true
+    enum:
+      - 1 # clock is not divided
+      - 2
+      - 4
+      - 8
+      - 16
+      - 24
+      - 32
+      - 48
+    description: |
+      Sample clock divider:
+      Applies to the ti,adc-clock-src.
+
+io-channel-cells:
+  - input
