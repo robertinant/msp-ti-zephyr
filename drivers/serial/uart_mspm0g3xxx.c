@@ -145,7 +145,7 @@ static int uart_mspm0g3xxx_irq_tx_ready(const struct device *dev)
 {
 	const struct uart_mspm0g3xxx_config *config = dev->config;
 
-	return (DL_UART_isTXFIFOFull(config->regs)) ? 0 : 1;
+	return (DL_UART_getEnabledInterruptStatus(config->regs, DL_UART_MAIN_INTERRUPT_TX)) ? 0 : 1;
 }
 
 static void uart_mspm0g3xxx_irq_rx_enable(const struct device *dev)
@@ -173,15 +173,15 @@ static int uart_mspm0g3xxx_irq_rx_ready(const struct device *dev)
 {
 	const struct uart_mspm0g3xxx_config *config = dev->config;
 
-	return (DL_UART_Main_isRXFIFOEmpty(config->regs)) ? 0 : 1;
+	return (DL_UART_getEnabledInterruptStatus(config->regs, DL_UART_MAIN_INTERRUPT_RX)) ? 1 : 0;
 }
 
 static int uart_mspm0g3xxx_irq_is_pending(const struct device *dev)
 {
 	const struct uart_mspm0g3xxx_config *config = dev->config;
 
-	return (DL_UART_Main_getPendingInterrupt(config->regs) &
-		(DL_UART_MAIN_INTERRUPT_RX | DL_UART_MAIN_INTERRUPT_TX))
+	return (DL_UART_getEnabledInterruptStatus(config->regs, 
+	DL_UART_MAIN_INTERRUPT_RX | DL_UART_MAIN_INTERRUPT_TX))
 		       ? 1
 		       : 0;
 }
@@ -215,7 +215,8 @@ static void uart_mspm0g3xxx_isr(const struct device *dev)
 	struct uart_mspm0g3xxx_dev_data_t *const dev_data = dev->data;
 
 	/* Get the pending interrupt */
-	int int_status = DL_UART_Main_getPendingInterrupt(config->regs);
+	int int_status = DL_UART_getEnabledInterruptStatus(config->regs, 
+	DL_UART_MAIN_INTERRUPT_RX | DL_UART_MAIN_INTERRUPT_TX);
 
 	/* Perform callback if defined */
 	if (dev_data->cb) {
@@ -226,7 +227,7 @@ static void uart_mspm0g3xxx_isr(const struct device *dev)
 	 * Clear interrupts only after cb called, as Zephyr UART clients expect
 	 * to check interrupt status during the callback.
 	 */
-	DL_UART_Main_disableInterrupt(config->regs, int_status);
+	DL_UART_Main_clearInterruptStatus(config->regs, int_status);
 }
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */
 
