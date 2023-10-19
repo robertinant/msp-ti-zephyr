@@ -7,6 +7,7 @@
 #include <zephyr/dt-bindings/adc/ti_mspm0_adc.h>
 
 / {
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
