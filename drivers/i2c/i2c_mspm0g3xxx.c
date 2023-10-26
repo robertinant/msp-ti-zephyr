@@ -5,6 +5,7 @@
 /* Zephyr includes */
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <soc.h>
 
 /* Logging includes */
@@ -18,10 +19,10 @@ LOG_MODULE_REGISTER(i2c_mspm0g3xxx);
 #include <ti/driverlib/dl_gpio.h>
 
 /* Defines for I2C1 */
-#define GPIO_I2C1_IOMUX_SDA      (IOMUX_PINCM16)
-#define GPIO_I2C1_IOMUX_SDA_FUNC IOMUX_PINCM16_PF_I2C1_SDA
-#define GPIO_I2C1_IOMUX_SCL      (IOMUX_PINCM15)
-#define GPIO_I2C1_IOMUX_SCL_FUNC IOMUX_PINCM15_PF_I2C1_SCL
+// #define GPIO_I2C1_IOMUX_SDA      (IOMUX_PINCM16)
+// #define GPIO_I2C1_IOMUX_SDA_FUNC IOMUX_PINCM16_PF_I2C1_SDA
+// #define GPIO_I2C1_IOMUX_SCL      (IOMUX_PINCM15)
+// #define GPIO_I2C1_IOMUX_SCL_FUNC IOMUX_PINCM15_PF_I2C1_SCL
 
 #define TI_MSPM0G_TARGET_INTERRUPTS  (DL_I2C_INTERRUPT_TARGET_RXFIFO_TRIGGER | \
 									  DL_I2C_INTERRUPT_TARGET_TXFIFO_TRIGGER | \
@@ -47,6 +48,7 @@ enum i2c_mspm0g3xxx_state {
 
 struct i2c_mspm0g3xxx_config {
 	uint32_t base;
+	const struct pinctrl_dev_config * pinctrl;
 };
 
 struct i2c_mspm0g3xxx_data {
@@ -64,10 +66,8 @@ struct i2c_mspm0g3xxx_data {
 	struct k_sem i2c_busy_sem;
 };
 
-static const struct i2c_mspm0g3xxx_config i2c_mspm0g3xxx_config = {.base = DT_INST_REG_ADDR(0)};
 
-static struct i2c_mspm0g3xxx_data i2c_mspm0g3xxx_data = {
-	.gI2CClockConfig = {.clockSel = DL_I2C_CLOCK_BUSCLK, .divideRatio = DL_I2C_CLOCK_DIVIDE_1}};
+
 
 static int i2c_mspm0g3xxx_configure(const struct device *dev, uint32_t dev_config)
 {
@@ -444,7 +444,7 @@ static void i2c_mspm0g3xxx_isr(const struct device *dev)
 			if(data->target_callbacks->read_requested != NULL){
 				uint8_t nextByte;
 				data->target_tx_valid = data->target_callbacks->read_requested(data->target_config, &nextByte);
-				if(data->target_tx_valid){
+				if(data->target_tx_valid == 0){
 					DL_I2C_transmitTargetData((I2C_Regs *)config->base, nextByte);
 				} else {
 					/* In this case, no new data is desired to be filled, thus
@@ -504,14 +504,16 @@ static int i2c_mspm0g3xxx_init(const struct device *dev)
 	delay_cycles(POWER_STARTUP_DELAY);
 
 	/* Init GPIO */
-	DL_GPIO_initPeripheralInputFunctionFeatures(
-		GPIO_I2C1_IOMUX_SDA, GPIO_I2C1_IOMUX_SDA_FUNC, DL_GPIO_INVERSION_DISABLE,
-		DL_GPIO_RESISTOR_PULL_UP, DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-	DL_GPIO_initPeripheralInputFunctionFeatures(
-		GPIO_I2C1_IOMUX_SCL, GPIO_I2C1_IOMUX_SCL_FUNC, DL_GPIO_INVERSION_DISABLE,
-		DL_GPIO_RESISTOR_PULL_UP, DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-	DL_GPIO_enableHiZ(GPIO_I2C1_IOMUX_SDA);
-	DL_GPIO_enableHiZ(GPIO_I2C1_IOMUX_SCL);
+	// DL_GPIO_initPeripheralInputFunctionFeatures(
+	// 	GPIO_I2C1_IOMUX_SDA, GPIO_I2C1_IOMUX_SDA_FUNC, DL_GPIO_INVERSION_DISABLE,
+	// 	DL_GPIO_RESISTOR_PULL_UP, DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
+	// DL_GPIO_initPeripheralInputFunctionFeatures(
+	// 	GPIO_I2C1_IOMUX_SCL, GPIO_I2C1_IOMUX_SCL_FUNC, DL_GPIO_INVERSION_DISABLE,
+	// 	DL_GPIO_RESISTOR_PULL_UP, DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
+	// DL_GPIO_enableHiZ(GPIO_I2C1_IOMUX_SDA);
+	// DL_GPIO_enableHiZ(GPIO_I2C1_IOMUX_SCL);
+
+	pinctrl_apply_state(config->pinctrl, PINCTRL_STATE_DEFAULT);
 
 	/* Config clocks and analog filter */
 	DL_I2C_setClockConfig((I2C_Regs *)config->base,
@@ -547,8 +549,6 @@ static int i2c_mspm0g3xxx_init(const struct device *dev)
 		    DEVICE_DT_INST_GET(0), 0);
 	irq_enable(DT_INST_IRQN(0));
 
-
-
 	return 0;
 }
 
@@ -560,6 +560,29 @@ static const struct i2c_driver_api i2c_mspm0g3xxx_driver_api = {
 	.target_unregister = i2c_mspm0g3xxx_target_unregister,
 };
 
-I2C_DEVICE_DT_INST_DEFINE(0, i2c_mspm0g3xxx_init, NULL, &i2c_mspm0g3xxx_data,
-			  &i2c_mspm0g3xxx_config, POST_KERNEL, CONFIG_I2C_INIT_PRIORITY,
+
+
+
+
+#define MSP_I2C_INIT_FN(index) 									\
+																\
+PINCTRL_DT_INST_DEFINE(index);									\
+																\
+static const struct i2c_mspm0g3xxx_config i2c_mspm0g3xxx_cfg_##index = {	\
+	.base = DT_INST_REG_ADDR(index),										\
+	.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),						\
+};																			\
+																			\
+static struct i2c_mspm0g3xxx_data i2c_mspm0g3xxx_data_##index = {			\
+	.gI2CClockConfig = {													\
+		.clockSel = DL_I2C_CLOCK_BUSCLK,									\
+		.divideRatio = DL_I2C_CLOCK_DIVIDE_1								\
+	}																		\
+};																			\
+																			\
+																			\
+I2C_DEVICE_DT_INST_DEFINE(index, i2c_mspm0g3xxx_init, NULL, &i2c_mspm0g3xxx_data_##index,   \
+			  &i2c_mspm0g3xxx_cfg_##index, POST_KERNEL, CONFIG_I2C_INIT_PRIORITY,      		\
 			  &i2c_mspm0g3xxx_driver_api);
+
+DT_INST_FOREACH_STATUS_OKAY(MSP_I2C_INIT_FN)

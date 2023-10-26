@@ -188,14 +188,14 @@ static int gpio_mspm0g3xxx_manage_callback(const struct device *port,
 	return gpio_manage_callback(&data->callbacks, callback, set);
 }
 
-static uint32_t gpio_mspm0g3xxx_get_pending_int(const struct device *dev)
+static uint32_t gpio_mspm0g3xxx_get_pending_int(const struct device *port)
 {
-	const struct gpio_mspm0g3xxx_config *config = dev->config;
+	const struct gpio_mspm0g3xxx_config *config = port->config;
 
 	return DL_GPIO_getPendingInterrupt(config->base);
 }
 
-static void gpio_mspm0g3xxx_isr(const struct device *dev)
+static void gpio_mspm0g3xxx_isr(const struct device *port)
 {
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(gpioa), okay)
 	const struct device *dev_a = DEVICE_DT_GET(GPIOA_NODE);
@@ -224,7 +224,7 @@ static void gpio_mspm0g3xxx_isr(const struct device *dev)
 
 static bool init_irq = true;
 
-static int gpio_mspm0g3xxx_init(const struct device *dev)
+static int gpio_mspm0g3xxx_init(const struct device *port)
 {
 	/* Powering up of GPIOs is part of soc.c */
 

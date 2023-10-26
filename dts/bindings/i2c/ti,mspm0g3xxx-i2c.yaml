@@ -4,11 +4,20 @@ description: TI MSPM0G3XXX I2C
 
 compatible: "ti,mspm0g3xxx-i2c"
 
-include: [i2c-controller.yaml, base.yaml]
+include: [i2c-controller.yaml, pinctrl-device.yaml, base.yaml]
 
 properties:
   reg:
     required: true
 
   interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-1:
+    required: false
+
+  pinctrl-names:
     required: true

@@ -251,7 +251,7 @@ struct pinctrl_dev_config {
  *
  * @see #PINCTRL_DT_DEFINE
  */
-#define PINCTRL_DT_INST_DEFINE(inst) PINCTRL_DT_DEFINE(DT_DRV_INST(inst))
+#define   PINCTRL_DT_INST_DEFINE(inst) PINCTRL_DT_DEFINE(DT_DRV_INST(inst))
 
 /**
  * @brief Obtain a reference to the pin control configuration given a node
