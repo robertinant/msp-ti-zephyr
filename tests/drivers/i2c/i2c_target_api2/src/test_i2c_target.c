@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016 Intel Corporation
+ * Copyright (c) 2023 Texas Instruments Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -7,8 +8,9 @@
 /*
  * @addtogroup t_i2c_basic
  * @{
- * @defgroup t_i2c_read_write test_i2c_read_write
- * @brief TestPurpose: verify I2C master can read and write
+ * @defgroup t_i2c_target test_i2c_target_api2
+ * @brief TestPurpose: verify I2C target can be registered and
+ *  	  function correctly. (requires an external controller)
  * @}
  */
 
@@ -40,6 +42,8 @@ uint32_t rxBufIndex = 0;
 struct k_sem my_sem;
 
 static int i2c_stop_callback(struct i2c_target_config * cfg){
+	/* used to control test flow and notify thread that transaction has
+	 * completed */
 	k_sem_give(&my_sem);
 	return 0;
 }
@@ -90,81 +94,11 @@ struct i2c_target_callbacks i2c_callbacks_data = {
 	.stop = i2c_stop_callback, 			    /* callback to mark the end of a transaction */
 };
 
-struct i2c_target_callbacks i2c_callbacks_echo = {
-	.write_requested = NULL, 				/* not currently supported */
-	.read_requested = NULL,  				/* not currently supported */
-	.write_received = NULL,   				/* target will echo received */
-	.read_processed = NULL,   				/* target will echo received */
-	.stop = i2c_stop_callback, 			    /* callback to mark the end of a transaction */
-};
-
-struct i2c_target_config i2c_target_cfg_echo = {
-	.flags = 0x00, /* doesn't support 10-bit addressing. */
-	.address = 0x48,
-	.callbacks = &i2c_callbacks_echo,
-};
-
 struct i2c_target_config i2c_target_cfg_data = {
 	.flags = 0x00, /* doesn't support 10-bit addressing. */
 	.address = 0x48,
 	.callbacks = &i2c_callbacks_data,
 };
-
-
-static int test_i2c_echo(void)
-{
-
-	const struct device *const i2c_dev = DEVICE_DT_GET(I2C_DEV_NODE);
-	uint32_t i2c_cfg_tmp;
-
-	k_sem_init(&my_sem, 0, 1);
-
-	if (!device_is_ready(i2c_dev)) {
-		TC_PRINT("I2C device is not ready\n");
-		return TC_FAIL;
-	}
-
-	/* 1. Verify i2c_configure() */
-	if (i2c_configure(i2c_dev, i2c_cfg)) {
-		TC_PRINT("I2C config failed\n");
-		return TC_FAIL;
-	}
-
-	/* 2. Verify i2c_get_config() */
-	if (i2c_get_config(i2c_dev, &i2c_cfg_tmp)) {
-		TC_PRINT("I2C get_config failed\n");
-		return TC_FAIL;
-	}
-	if (i2c_cfg != i2c_cfg_tmp) {
-		TC_PRINT("I2C get_config returned invalid config\n");
-		return TC_FAIL;
-	}
-
-
-	/* 3. verify i2c_write() */
-	if (i2c_target_register(i2c_dev, &i2c_target_cfg_echo)) {
-		TC_PRINT("Fail to convert to target\n");
-		return TC_FAIL;
-	}
-	k_sleep(K_MSEC(1));
-
-	for(int j = 4; j > 0; j--)
-	{
-		TC_PRINT("Waiting to recieve data from master. Transactions remaining: %d\n", j);
-
-		k_sem_take(&my_sem, K_FOREVER);
-
-		TC_PRINT("Master data received.\n");
-		k_sleep(K_MSEC(1));
-	}
-
-	if(i2c_target_unregister(i2c_dev, &i2c_target_cfg_echo)){
-		TC_PRINT("Fail to unregister\n");
-		return TC_FAIL;
-	}
-
-	return TC_PASS;
-}
 
 static int test_i2c_data(void)
 {
@@ -189,6 +123,7 @@ static int test_i2c_data(void)
 		TC_PRINT("I2C get_config failed\n");
 		return TC_FAIL;
 	}
+
 	if (i2c_cfg != i2c_cfg_tmp) {
 		TC_PRINT("I2C get_config returned invalid config\n");
 		return TC_FAIL;
@@ -206,8 +141,6 @@ static int test_i2c_data(void)
 		TC_PRINT("Waiting to recieve data from master. Transactions remaining: %d\n", j);
 
 		k_sem_take(&my_sem, K_FOREVER);
-
-
 
 		TC_PRINT("Master data received.\n");
 		/* print and reset buffers for the next transaction */
@@ -237,14 +170,53 @@ static int test_i2c_data(void)
 	return TC_PASS;
 }
 
-// ZTEST(I2C_DEV_NODE, test_i2c_echo)
-// {
-// 	zassert_true(test_i2c_echo() == TC_PASS);
-// }
+
+static int test_i2c_errors(void) {
+	const struct device *const i2c_dev = DEVICE_DT_GET(I2C_DEV_NODE);
+
+	k_sem_init(&my_sem, 0, 1);
+
+	if (!device_is_ready(i2c_dev)) {
+		TC_PRINT("I2C device is not ready\n");
+		return TC_FAIL;
+	}
+
+	/* 1. Verify i2c_configure() */
+	if (i2c_configure(i2c_dev, i2c_cfg)) {
+		TC_PRINT("I2C config failed\n");
+		return TC_FAIL;
+	}
+
+	/* Test common errors in the configuration of the I2C peripheral */
+
+	if (i2c_target_register(i2c_dev, &i2c_target_cfg_data)) {
+		TC_PRINT("Fail to convert to target\n");
+		return TC_FAIL;
+	}
+	/* attempting to re-register as a target. This is allowed.  */
+	if (i2c_target_register(i2c_dev, &i2c_target_cfg_data)) {
+		TC_PRINT("Fail to convert to target\n");
+		return TC_FAIL;
+	}
+
+	uint8_t test_array[] = {0x81, 0x82, 0x83, 0x84};
+	/* starting a controller transfer as a target. Should fail */
+	if (i2c_burst_write(i2c_dev, 0x1E, 0x00, test_array, 4) != -EBUSY) {
+		TC_PRINT("Fail to fail\n");
+		return TC_FAIL;
+	}
+
+	return TC_PASS;
+}
 
 ZTEST(I2C_DEV_NODE, test_i2c_data)
 {
 	zassert_true(test_i2c_data() == TC_PASS);
+}
+
+ZTEST(I2C_DEV_NODE, test_i2c_errors)
+{
+	zassert_true(test_i2c_errors() == TC_PASS);
 }
 
 ZTEST_SUITE(I2C_DEV_NODE, NULL, NULL, NULL, NULL, NULL);
