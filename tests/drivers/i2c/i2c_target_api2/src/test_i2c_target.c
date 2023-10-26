@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Intel Corporation
+ * Copyright (c) 2023 Texas Instruments Inc.
  * Copyright (c) 2023 Texas Instruments Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
