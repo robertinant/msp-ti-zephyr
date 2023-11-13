@@ -34,8 +34,7 @@ struct uart_mspm0g3xxx_data {
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 static void uart_mspm0g3xxx_isr(const struct device *dev);
-#define MSP_INTERRUPT_CALLBACK_FN(index) \
-	.cb = NULL,
+#define MSP_INTERRUPT_CALLBACK_FN(index) .cb = NULL,
 #else
 #define MSP_INTERRUPT_CALLBACK_FN(index)
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */
@@ -259,7 +258,8 @@ static struct uart_mspm0g3xxx_data uart_mspm0g3xxx_data_##index = {		\
 			.parity = DL_UART_MAIN_PARITY_NONE,								\
 			.wordLength = DL_UART_MAIN_WORD_LENGTH_8_BITS,					\
 			.stopBits = DL_UART_MAIN_STOP_BITS_ONE,							\
-			 MSP_INTERRUPT_CALLBACK_FN(index) }, 							\
+			},									 							\
+	MSP_INTERRUPT_CALLBACK_FN(index) 										\
 };																			\
 																			\
 DEVICE_DT_INST_DEFINE(index, &uart_mspm0g3xxx_init, NULL, 					\

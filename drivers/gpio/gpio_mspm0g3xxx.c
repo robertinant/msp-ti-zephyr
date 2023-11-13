@@ -250,6 +250,7 @@ static int gpio_mspm0g3xxx_init(const struct device *port)
 static int gpio_mspm0g3xxx_port_get_direction(const struct device *port, gpio_port_pins_t map,
 					      gpio_port_pins_t *inputs, gpio_port_pins_t *outputs)
 {
+	return -ENOTSUP;
 }
 #endif /* CONFIG_GPIO_GET_DIRECTION */
 
@@ -268,19 +269,19 @@ static const struct gpio_driver_api gpio_mspm0g3xxx_driver_api = {
 #endif /* CONFIG_GPIO_GET_DIRECTION */
 };
 
-#define GPIO_DEVICE_INIT(__node, __suffix, __base_addr)                                            \
-	static const struct gpio_mspm0g3xxx_config gpio_mspm0g3xxx_cfg_##__suffix = {              \
-		.common =                                                                          \
-			{                                                                          \
-				.port_pin_mask =                                                   \
-					GPIO_PORT_PIN_MASK_FROM_NGPIOS(gpio##__suffix##_pins),     \
-			},                                                                         \
-		.base = (GPIO_Regs *)__base_addr,                                                  \
-		.pincm_lut = gpio##__suffix##_pincm_lut,                                           \
-	};                                                                                         \
-	static struct gpio_mspm0g3xxx_data gpio_mspm0g3xxx_data_##__suffix;                        \
-	DEVICE_DT_DEFINE(__node, gpio_mspm0g3xxx_init, PM_DEVICE_DT_GET(__node),                   \
-			 &gpio_mspm0g3xxx_data_##__suffix, &gpio_mspm0g3xxx_cfg_##__suffix,        \
+#define GPIO_DEVICE_INIT(__node, __suffix, __base_addr)                            	\
+	static const struct gpio_mspm0g3xxx_config gpio_mspm0g3xxx_cfg_##__suffix = {  	\
+		.common =                                                                  	\
+			{                                                                      	\
+				.port_pin_mask =                                                   	\
+					GPIO_PORT_PIN_MASK_FROM_NGPIOS(gpio##__suffix##_pins),     	   	\
+			},                                                                      \
+		.base = (GPIO_Regs *)__base_addr,                                           \
+		.pincm_lut = gpio##__suffix##_pincm_lut,                                    \
+	};                                                                              \
+	static struct gpio_mspm0g3xxx_data gpio_mspm0g3xxx_data_##__suffix;             \
+	DEVICE_DT_DEFINE(__node, gpio_mspm0g3xxx_init, NULL,       						\
+			 &gpio_mspm0g3xxx_data_##__suffix, &gpio_mspm0g3xxx_cfg_##__suffix,     \
 			 PRE_KERNEL_1, CONFIG_GPIO_INIT_PRIORITY, &gpio_mspm0g3xxx_driver_api)
 
 #define GPIO_DEVICE_INIT_MSPM0G3XXX(__suffix)                                                      \
