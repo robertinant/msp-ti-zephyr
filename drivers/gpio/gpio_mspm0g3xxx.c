@@ -123,7 +123,7 @@ static int gpio_mspm0g3xxx_port_set_bits_raw(const struct device *port, uint32_t
 {
 	const struct gpio_mspm0g3xxx_config *config = port->config;
 
-	DL_GPIO_writePins(config->base, mask);
+	DL_GPIO_setPins(config->base, mask);
 
 	return 0;
 }
