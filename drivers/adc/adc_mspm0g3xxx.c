@@ -18,14 +18,10 @@ LOG_MODULE_REGISTER(adc_mspm0g3xxx);
 /* Driverlib includes */
 #include <ti/driverlib/dl_adc12.h>
 #include <ti/driverlib/dl_gpio.h>
+#include <ti/driverlib/dl_vref.h>
 
 #define ADC_CONTEXT_USES_KERNEL_TIMER
 #include "adc_context.h"
-
-/**
- * Maximum number of channels supported per ADC is 17
- */
-#define MAX_CHAN_ID 0x11
 
 /** Internal sample time unit conversion entry. */
 struct adc_mspm0g3xxx_sample_time_entry {
@@ -42,10 +38,9 @@ struct adc_mspm0g3xxx_sample_time_entry {
 struct adc_mspm0g3xxx_data {
 	int8_t sampleTime0;
 	int8_t sampleTime1;
+	uint32_t channelMemCtl[ADC_SYS_NUM_ANALOG_CHAN];
 	struct adc_context ctx;
 	const struct device *dev;
-	uint32_t ref_source;
-	uint8_t sample_time;
 	uint16_t *buffer;
 	uint16_t *repeat_buffer;
 	struct k_sem adc_busy_sem;
@@ -56,7 +51,6 @@ struct adc_mspm0g3xxx_cfg {
 	DL_ADC12_ClockConfig ADCClockConfig;
 	const struct pinctrl_dev_config * pinctrl;
 	void (*irq_cfg_func)(void);
-
 };
 
 
@@ -69,10 +63,6 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 		CONTAINER_OF(ctx, struct adc_mspm0g3xxx_data, ctx);
 
 	data->repeat_buffer = data->buffer;
-#ifdef UNDO
-	AUXADCEnableSync(data->ref_source, data->sample_time, AUXADC_TRIGGER_MANUAL);
-	AUXADCGenManualTrigger();
-#endif
 }
 
 static void adc_context_update_buffer_pointer(struct adc_context *ctx,
@@ -152,19 +142,145 @@ static int adc_mspm0g3xxx_validate_sampling_time(const struct device *dev, uint1
 	return -EINVAL;
 }
 
+static const DL_VREF_ClockConfig gVREFClockConfig = {
+    .clockSel = DL_VREF_CLOCK_BUSCLK,
+    .divideRatio = DL_VREF_CLOCK_DIVIDE_1,
+};
+static DL_VREF_Config gVREFConfig = {
+    .vrefEnable     = DL_VREF_ENABLE_ENABLE,
+    .bufConfig      = DL_VREF_BUFCONFIG_OUTPUT_2_5V,
+    .shModeEnable   = DL_VREF_SHMODE_DISABLE,
+    .holdCycleCount = DL_VREF_HOLD_MIN,
+    .shCycleCount   = DL_VREF_SH_MIN,
+};
+
+static int adc_mspm0g3xxx_config_Vref(int vref_source, 
+									  	int vref_val, 
+										uint32_t *memCtlConfig)
+{
+	int error = 0;
+	bool initVREF = false;
+
+	switch (vref_source)
+	{
+		case ADC_REF_VDD_1:
+			*memCtlConfig |= DL_ADC12_REFERENCE_VOLTAGE_VDDA;
+		break;
+		case ADC_REF_EXTERNAL0:
+			/* Initialize VREF if needed */
+			if ( (VREF->GPRCM.PWREN & VREF_PWREN_ENABLE_MASK) == 
+				 VREF_PWREN_ENABLE_DISABLE) 
+			{
+				gVREFConfig.vrefEnable = DL_VREF_ENABLE_DISABLE;
+				initVREF = true;
+				*memCtlConfig |= DL_ADC12_REFERENCE_VOLTAGE_EXTREF;	
+			}
+			else
+			{
+				/* If VREF was initialized, validate configuration */
+				if (DL_VREF_isEnabled(VREF) == false)
+				{
+					/* VREF is already set to external*/
+					*memCtlConfig |= DL_ADC12_REFERENCE_VOLTAGE_EXTREF;	
+				}
+				else
+				{
+					/* VREF is already configured to internal, 
+					    using external for another channel is not valid */
+					return -EINVAL;
+				}
+			}
+		break;
+		case ADC_REF_INTERNAL:
+			/* Initialize VREF if needed */
+			if ( (VREF->GPRCM.PWREN & VREF_PWREN_ENABLE_MASK) == 
+				 VREF_PWREN_ENABLE_DISABLE) 
+			{
+				if (vref_val == 2500) 
+				{
+					gVREFConfig.bufConfig = DL_VREF_BUFCONFIG_OUTPUT_2_5V;
+				}
+				else if (vref_val == 1400)
+				{
+					gVREFConfig.bufConfig = DL_VREF_BUFCONFIG_OUTPUT_1_4V;
+				}
+				else
+				{
+					/* Invalid configuration */
+					return -EINVAL;
+				}
+				initVREF = true;
+				gVREFConfig.vrefEnable = DL_VREF_ENABLE_ENABLE;
+				*memCtlConfig |= DL_ADC12_REFERENCE_VOLTAGE_INTREF;	
+			}
+			else
+			{
+				/* If VREF was initialized, validate configuration */
+				if (DL_VREF_isEnabled(VREF) == true)
+				{
+					/* VREF is already set to internal*/
+					if ( (vref_val == 2500) && 
+						 ( (VREF->CTL0 & VREF_CTL0_BUFCONFIG_MASK) == 
+							 VREF_CTL0_BUFCONFIG_OUTPUT2P5V) )
+					{
+						*memCtlConfig |= DL_ADC12_REFERENCE_VOLTAGE_INTREF;	
+					}
+					else if ( (vref_val == 1400) &&
+							  ( (VREF->CTL0 & VREF_CTL0_BUFCONFIG_MASK) == 
+							     VREF_CTL0_BUFCONFIG_OUTPUT1P4V) )
+					{
+						*memCtlConfig |= DL_ADC12_REFERENCE_VOLTAGE_INTREF;	
+					}
+					else
+					{
+						/* VREF is already configured but doesn't match
+							requested configuration*/
+						return -EINVAL;
+					}
+				}
+				else
+				{
+					/* VREF is already configured to external, 
+					    using internal for another channel is not valid */
+					return -EINVAL;
+				}
+			}
+		break;
+		default:
+			return -EINVAL;
+	}
+
+	if (initVREF == true)
+	{
+		DL_VREF_reset(VREF);
+		DL_VREF_enablePower(VREF);
+    	delay_cycles(POWER_STARTUP_DELAY);
+
+		DL_VREF_setClockConfig(VREF,
+        	(DL_VREF_ClockConfig *) &gVREFClockConfig);
+    	DL_VREF_configReference(VREF,
+        	(DL_VREF_Config *) &gVREFConfig);
+	}
+	return error;
+}
+
 static int adc_mspm0g3xxx_channel_setup(const struct device *dev,
 				    const struct adc_channel_cfg *channel_cfg)
 {
 	struct adc_mspm0g3xxx_data *data = dev->data;
 	const struct adc_mspm0g3xxx_cfg *config = dev->config;
 	const uint8_t ch = channel_cfg->channel_id;
-	volatile int samplingTime;
-	int samplingTimeReg;
-
-	if (ch > MAX_CHAN_ID) {
-		LOG_ERR("Channel 0x%X is not supported, max 0x%X", ch, MAX_CHAN_ID);
+	const struct adc_driver_api *api = (struct adc_driver_api *)dev->api;
+	int samplingTime;
+	int vrefInit = 0;
+	
+	if (ch > ADC_SYS_NUM_ANALOG_CHAN) {
+		LOG_ERR("Channel 0x%X is not supported, max 0x%X", ch, ADC_SYS_NUM_ANALOG_CHAN);
 		return -EINVAL;
 	}
+
+	/* Initialize MEMCTL configuration to default */
+	data->channelMemCtl[ch] = 0;
 
 	samplingTime = adc_mspm0g3xxx_validate_sampling_time(dev, channel_cfg->acquisition_time);
 	if (samplingTime < 0)
@@ -173,28 +289,28 @@ static int adc_mspm0g3xxx_channel_setup(const struct device *dev,
 	}
 	
 	/* Select one of the sampling timer registers */
-	LOG_DBG("Setup %d acq time %d", ch, data->sample_time);
+	LOG_DBG("Setup %d sampling time %d", ch, samplingTime);
 	if (data->sampleTime0 == -1) {
 		DL_ADC12_setSampleTime0((ADC12_Regs *)config->base, samplingTime);
 		data->sampleTime0 = samplingTime;
-		samplingTimeReg = DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP0;
+		data->channelMemCtl[ch] |= DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP0;
 	}
 	else if (data->sampleTime0 == samplingTime)
 	{
-		samplingTimeReg = DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP0;
+		data->channelMemCtl[ch] |= DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP0;
 	}
 	else if (data->sampleTime1 == -1) {
 		DL_ADC12_setSampleTime1((ADC12_Regs *)config->base, samplingTime);
 		data->sampleTime1 = samplingTime;
-		samplingTimeReg = DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP1;
+		data->channelMemCtl[ch] |= DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP1;
 	}
 	else if (data->sampleTime0 == samplingTime)
 	{
-		samplingTimeReg = DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP1;
+		data->channelMemCtl[ch] |= DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP1;
 	}
 	else
 	{
-		LOG_ERR("Two sampling times are supported");
+		LOG_ERR("Two sampling times are supported by this ADC");
 		return -EINVAL;
 	}
 
@@ -207,21 +323,33 @@ static int adc_mspm0g3xxx_channel_setup(const struct device *dev,
 		LOG_ERR("Gain is not valid");
 		return -EINVAL;
 	}
-#ifdef UNDO
-	if (channel_cfg->reference == ADC_REF_INTERNAL) {
-		data->ref_source = AUXADC_REF_FIXED;
-	} else if (channel_cfg->reference == ADC_REF_VDD_1) {
-		data->ref_source = AUXADC_REF_VDDS_REL;
-	} else {
-		LOG_ERR("Reference is not valid");
+
+	vrefInit = adc_mspm0g3xxx_config_Vref(channel_cfg->reference,
+								   api->ref_internal,
+								   &data->channelMemCtl[ch]);
+	if (vrefInit < 0)
+	{
+		LOG_ERR("Error configuring VREF");
+		return vrefInit;
+	}
+
+	if (channel_cfg->reference == ADC_REF_VDD_1) {
+		data->channelMemCtl[ch] |= DL_ADC12_REFERENCE_VOLTAGE_VDDA;
+	} else if (channel_cfg->reference == ADC_REF_INTERNAL) {
+		if ((api->ref_internal == 2500) || (api->ref_internal == 1400))
+		{
+			LOG_DBG("Configure Internal VREF");
+		}
+		data->channelMemCtl[ch] |= DL_ADC12_REFERENCE_VOLTAGE_INTREF;
+	} else if (channel_cfg->reference == ADC_REF_EXTERNAL0) {
+		LOG_DBG("Configure External VREF");
+		data->channelMemCtl[ch] |= DL_ADC12_REFERENCE_VOLTAGE_EXTREF;
+	}
+	else {
+		LOG_ERR("ADC Voltage reference is not supported");
 		return -EINVAL;
 	}
-#endif
 
-#ifdef UNDO
-	AUXADCDisable();
-	AUXADCSelectInput(ch);
-#endif
 	LOG_DBG("ADC Channel setup successful!");
 	return 0;
 }
@@ -314,19 +442,6 @@ static void adc_mspm0g3xxx_isr(const struct device *dev)
 	adc_context_on_sampling_done(&data->ctx, dev);
 }
 
-static const struct adc_driver_api mspm0g3xxx_driver_api = {
-	.channel_setup = adc_mspm0g3xxx_channel_setup,
-	.read = adc_mspm0g3xxx_read,
-#ifdef CONFIG_ADC_ASYNC
-	.read_async = adc_mspm0g3xxx_read_async,
-#endif
-};
-
-/*#define ADC_MSPM0G3XXX_DIV(x)	DT_INST_PROP(x, ti_clk_divider)
-#define ADC_MSPM0G3XXX_DT_DIV(x)	\
-	_CONCAT(ADC_STM32_CLOCK_PREFIX(x), ADC_MSPM0G3XXX_DIV(x))
-*/
-
 #define ADC_DT_CLOCK_SOURCE(x)	DT_INST_PROP(x, ti_clk_source)
 
 #define ADC_CLOCK_DIV(x)	DT_INST_PROP(x, ti_clk_divider)
@@ -335,32 +450,42 @@ static const struct adc_driver_api mspm0g3xxx_driver_api = {
 
 #define ADC_DT_CLOCK_RANGE(x)	DT_INST_PROP(x, ti_clk_range)
 
-#define MSPM0G3XXX_ADC_INIT(index)						 \
+#define MSPM0G3XXX_ADC_INIT(index)						 					\
+																			\
 PINCTRL_DT_INST_DEFINE(index);												\
-	static void adc_mspm0g3xxx_cfg_func_##index(void);			 \
-	static const struct adc_mspm0g3xxx_cfg adc_mspm0g3xxx_cfg_##index = { \
-		.base = DT_INST_REG_ADDR(index),				 \
-		.irq_cfg_func = adc_mspm0g3xxx_cfg_func_##index, \
-		.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),						\
-		.ADCClockConfig = {	\
-			.clockSel = ADC_DT_CLOCK_SOURCE(index),\
-			.freqRange = ADC_DT_CLOCK_RANGE(index), \
-			.divideRatio = ADC_DT_CLOCK_DIV(index) \
-		}		 \
-	};									 \
-	static struct adc_mspm0g3xxx_data adc_mspm0g3xxx_data_##index; \
-	DEVICE_DT_INST_DEFINE(index,						 \
-		&adc_mspm0g3xxx_init, NULL,					 \
-		&adc_mspm0g3xxx_data_##index,				 \
-		&adc_mspm0g3xxx_cfg_##index, POST_KERNEL,			 \
-		CONFIG_ADC_INIT_PRIORITY,					 \
-		&mspm0g3xxx_driver_api);					 \
-										 \
-	static void adc_mspm0g3xxx_cfg_func_##index(void)			 \
-	{									 \
-		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority),	 \
-				adc_mspm0g3xxx_isr, DEVICE_DT_INST_GET(index), 0); \
-		irq_enable(DT_INST_IRQN(index));				 \
-	}
+																			\
+static void adc_mspm0g3xxx_cfg_func_##index(void);			 				\
+																			\
+static const struct adc_mspm0g3xxx_cfg adc_mspm0g3xxx_cfg_##index = { 		\
+	.base = DT_INST_REG_ADDR(index),				 						\
+	.irq_cfg_func = adc_mspm0g3xxx_cfg_func_##index, 						\
+	.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),						\
+.ADCClockConfig = {															\
+		.clockSel = ADC_DT_CLOCK_SOURCE(index),								\
+		.freqRange = ADC_DT_CLOCK_RANGE(index), 							\
+		.divideRatio = ADC_DT_CLOCK_DIV(index) 								\
+	}		 																\
+};									 										\
+static const struct adc_driver_api mspm0g3xxx_driver_api##index = {			\
+	.channel_setup = adc_mspm0g3xxx_channel_setup,							\
+	.read = adc_mspm0g3xxx_read,											\
+	.ref_internal = DT_INST_PROP(index, vref_mv),							\
+	IF_ENABLED(CONFIG_ADC_ASYNC,											\
+		(.read_async = adc_mspm0g3xxx_read_async,))							\
+};																			\
+static struct adc_mspm0g3xxx_data adc_mspm0g3xxx_data_##index; 				\
+DEVICE_DT_INST_DEFINE(index,						 						\
+	&adc_mspm0g3xxx_init, NULL,					 							\
+	&adc_mspm0g3xxx_data_##index,				 							\
+	&adc_mspm0g3xxx_cfg_##index, POST_KERNEL,			 					\
+	CONFIG_ADC_INIT_PRIORITY,					 							\
+	&mspm0g3xxx_driver_api##index);					 						\
+																			\
+static void adc_mspm0g3xxx_cfg_func_##index(void)			 				\
+{									 										\
+	IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority),	 		\
+			adc_mspm0g3xxx_isr, DEVICE_DT_INST_GET(index), 0); 				\
+	irq_enable(DT_INST_IRQN(index));				 						\
+}
 
 DT_INST_FOREACH_STATUS_OKAY(MSPM0G3XXX_ADC_INIT)

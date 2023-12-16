@@ -55,5 +55,10 @@ properties:
       Sample clock divider:
       Applies to the ti,clk-source.
 
+  vref-mv:
+    type: int
+    default: 2500
+    description: Voltage reference in mV
+
 io-channel-cells:
   - input
