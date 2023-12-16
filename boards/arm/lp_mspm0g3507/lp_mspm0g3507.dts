@@ -81,13 +81,10 @@
 };
 
 &adc0 {
-	ti,clk-source = <ULPCLK>;
-	ti,clk-divider = <1>;
-	status = "okay";
-};
-
-&adc1 {
-	ti,clk-source = <ULPCLK>;
-	ti,clk-divider = <1>;
+	ti,clk-source = <MSP_ADC_CLOCK_ULPCLK>;
+	ti,clk-divider = <8>;
+	ti,clk-range = <MSP_ADC_CLOCK_RANGE_24TO32>;
+	pinctrl-0 = <&adc0_pa25>;
+	pinctrl-names = "default";
 	status = "okay";
 };

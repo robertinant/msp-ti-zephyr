@@ -12,6 +12,7 @@ LOG_MODULE_REGISTER(adc_mspm0g3xxx);
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
 #include <zephyr/drivers/adc.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <soc.h>
 
 /* Driverlib includes */
@@ -33,22 +34,29 @@ struct adc_mspm0g3xxx_sample_time_entry {
 };
 
 /** Maps standard unit sample times (us) to internal (raw hal_ti register) values */
-static const struct adc_mspm0g3xxx_sample_time_entry adc_g3xxx_sample_times[] = {
+/*static const struct adc_mspm0g3xxx_sample_time_entry adc_g3xxx_sample_times[] = {
 	{ 2, 1 },
 };
+*/
 
 struct adc_mspm0g3xxx_data {
+	int8_t sampleTime0;
+	int8_t sampleTime1;
 	struct adc_context ctx;
 	const struct device *dev;
 	uint32_t ref_source;
 	uint8_t sample_time;
 	uint16_t *buffer;
 	uint16_t *repeat_buffer;
+	struct k_sem adc_busy_sem;
 };
 
 struct adc_mspm0g3xxx_cfg {
-	unsigned long base;
+	uint32_t base;
+	DL_ADC12_ClockConfig ADCClockConfig;
+	const struct pinctrl_dev_config * pinctrl;
 	void (*irq_cfg_func)(void);
+
 };
 
 
@@ -84,8 +92,35 @@ static int adc_mspm0g3xxx_init(const struct device *dev)
 {
 	struct adc_mspm0g3xxx_data *data = dev->data;
 	const struct adc_mspm0g3xxx_cfg *config = dev->config;
+	int ret;
+
+	LOG_DBG("Initializing %s", dev->name);
 
 	data->dev = dev;
+
+	/* Init GPIO */
+	ret = pinctrl_apply_state(config->pinctrl, PINCTRL_STATE_DEFAULT);
+	if(ret < 0){
+		LOG_ERR("MSPM0 ADC pinctrl error (%d)", ret);
+		return ret;
+	}
+	
+	/* Init power */
+	DL_ADC12_reset((ADC12_Regs *)config->base);
+	DL_ADC12_enablePower((ADC12_Regs *)config->base);
+	delay_cycles(POWER_STARTUP_DELAY);
+	
+	/* Configure clock */
+	DL_ADC12_setClockConfig((ADC12_Regs *)config->base,
+						    (DL_ADC12_ClockConfig *) &config->ADCClockConfig);
+	
+	DL_ADC12_setPowerDownMode((ADC12_Regs *)config->base, 
+							  DL_ADC12_POWER_DOWN_MODE_MANUAL);
+
+	/* Reset the sample time configuration */
+	data->sampleTime0 = -1;
+	data->sampleTime1 = -1;
+
 #ifdef UNDO
 	/* clear any previous events */
 	AUXADCDisable();
@@ -98,49 +133,71 @@ static int adc_mspm0g3xxx_init(const struct device *dev)
 	return 0;
 }
 
+static int adc_mspm0g3xxx_validate_sampling_time(const struct device *dev, uint16_t acq_time)
+{
+	if (acq_time == ADC_ACQ_TIME_DEFAULT) {
+		return 0;
+	}
+
+	/* Current implementation only supports configuration in ADC ticks.
+	 *	The maximum value is limited by the hardware
+	 */
+	if ((ADC_ACQ_TIME_UNIT(acq_time) == ADC_ACQ_TIME_TICKS) &&
+		(ADC_ACQ_TIME_VALUE(acq_time) <= ADC12_SCOMP0_VAL_MASK))
+	{
+		return ADC_ACQ_TIME_VALUE(acq_time);
+	}
+
+	LOG_ERR("Sampling time not supported.");
+	return -EINVAL;
+}
+
 static int adc_mspm0g3xxx_channel_setup(const struct device *dev,
 				    const struct adc_channel_cfg *channel_cfg)
 {
 	struct adc_mspm0g3xxx_data *data = dev->data;
+	const struct adc_mspm0g3xxx_cfg *config = dev->config;
 	const uint8_t ch = channel_cfg->channel_id;
-	uint16_t sample_time_us = 0;
-	uint8_t i;
+	volatile int samplingTime;
+	int samplingTimeReg;
 
 	if (ch > MAX_CHAN_ID) {
 		LOG_ERR("Channel 0x%X is not supported, max 0x%X", ch, MAX_CHAN_ID);
 		return -EINVAL;
 	}
-#ifdef UNDO
-	switch (ADC_ACQ_TIME_UNIT(channel_cfg->acquisition_time)) {
-	case ADC_ACQ_TIME_TICKS:
-		data->sample_time = (uint16_t)ADC_ACQ_TIME_VALUE(channel_cfg->acquisition_time);
-		break;
-	case ADC_ACQ_TIME_MICROSECONDS:
-		sample_time_us = (uint16_t)ADC_ACQ_TIME_VALUE(channel_cfg->acquisition_time);
-		break;
-	case ADC_ACQ_TIME_NANOSECONDS:
-		sample_time_us = (uint16_t)(
-				ADC_ACQ_TIME_VALUE(channel_cfg->acquisition_time) * 1000);
-		break;
-	default:
-		data->sample_time = AUXADC_SAMPLE_TIME_170_US;
-		break;
+
+	samplingTime = adc_mspm0g3xxx_validate_sampling_time(dev, channel_cfg->acquisition_time);
+	if (samplingTime < 0)
+	{
+		return samplingTime;
 	}
-	if (sample_time_us) {
-		/* choose the nearest sample time configuration */
-		data->sample_time = adc_g3xxx_sample_times[0].reg_value;
-		for (i = 0; i < ARRAY_SIZE(adc_cc13xx_sample_times); i++) {
-			if (adc_g3xxx_sample_times[i].time_us >= sample_time_us) {
-				break;
-			}
-			data->sample_time = adc_g3xxx_sample_times[i].reg_value;
-		}
-		if (i >= ARRAY_SIZE(adc_g3xxx_sample_times)) {
-			LOG_ERR("Acquisition time is not valid");
-			return -EINVAL;
-		}
+	
+	/* Select one of the sampling timer registers */
+	LOG_DBG("Setup %d acq time %d", ch, data->sample_time);
+	if (data->sampleTime0 == -1) {
+		DL_ADC12_setSampleTime0((ADC12_Regs *)config->base, samplingTime);
+		data->sampleTime0 = samplingTime;
+		samplingTimeReg = DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP0;
 	}
-#endif
+	else if (data->sampleTime0 == samplingTime)
+	{
+		samplingTimeReg = DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP0;
+	}
+	else if (data->sampleTime1 == -1) {
+		DL_ADC12_setSampleTime1((ADC12_Regs *)config->base, samplingTime);
+		data->sampleTime1 = samplingTime;
+		samplingTimeReg = DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP1;
+	}
+	else if (data->sampleTime0 == samplingTime)
+	{
+		samplingTimeReg = DL_ADC12_SAMPLE_TIMER_SOURCE_SCOMP1;
+	}
+	else
+	{
+		LOG_ERR("Two sampling times are supported");
+		return -EINVAL;
+	}
+
 	if (channel_cfg->differential) {
 		LOG_ERR("Differential channels are not supported");
 		return -EINVAL;
@@ -161,11 +218,11 @@ static int adc_mspm0g3xxx_channel_setup(const struct device *dev,
 	}
 #endif
 
-	LOG_DBG("Setup %d acq time %d", ch, data->sample_time);
 #ifdef UNDO
 	AUXADCDisable();
 	AUXADCSelectInput(ch);
 #endif
+	LOG_DBG("ADC Channel setup successful!");
 	return 0;
 }
 
@@ -265,17 +322,33 @@ static const struct adc_driver_api mspm0g3xxx_driver_api = {
 #endif
 };
 
+/*#define ADC_MSPM0G3XXX_DIV(x)	DT_INST_PROP(x, ti_clk_divider)
+#define ADC_MSPM0G3XXX_DT_DIV(x)	\
+	_CONCAT(ADC_STM32_CLOCK_PREFIX(x), ADC_MSPM0G3XXX_DIV(x))
+*/
+
+#define ADC_DT_CLOCK_SOURCE(x)	DT_INST_PROP(x, ti_clk_source)
+
+#define ADC_CLOCK_DIV(x)	DT_INST_PROP(x, ti_clk_divider)
+#define ADC_DT_CLOCK_DIV(x)	\
+	_CONCAT(DL_ADC12_CLOCK_DIVIDE_, ADC_CLOCK_DIV(x))
+
+#define ADC_DT_CLOCK_RANGE(x)	DT_INST_PROP(x, ti_clk_range)
+
 #define MSPM0G3XXX_ADC_INIT(index)						 \
+PINCTRL_DT_INST_DEFINE(index);												\
 	static void adc_mspm0g3xxx_cfg_func_##index(void);			 \
 	static const struct adc_mspm0g3xxx_cfg adc_mspm0g3xxx_cfg_##index = { \
 		.base = DT_INST_REG_ADDR(index),				 \
-		.irq_cfg_func = adc_mspm0g3xxx_cfg_func_##index,		 \
+		.irq_cfg_func = adc_mspm0g3xxx_cfg_func_##index, \
+		.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),						\
+		.ADCClockConfig = {	\
+			.clockSel = ADC_DT_CLOCK_SOURCE(index),\
+			.freqRange = ADC_DT_CLOCK_RANGE(index), \
+			.divideRatio = ADC_DT_CLOCK_DIV(index) \
+		}		 \
 	};									 \
-	static struct adc_mspm0g3xxx_data adc_mspm0g3xxx_data_##index = { \
-		ADC_CONTEXT_INIT_TIMER(adc_mspm0g3xxx_data_##index, ctx),	 \
-		ADC_CONTEXT_INIT_LOCK(adc_mspm0g3xxx_data_##index, ctx),	 \
-		ADC_CONTEXT_INIT_SYNC(adc_mspm0g3xxx_data_##index, ctx),	 \
-	};									 \
+	static struct adc_mspm0g3xxx_data adc_mspm0g3xxx_data_##index; \
 	DEVICE_DT_INST_DEFINE(index,						 \
 		&adc_mspm0g3xxx_init, NULL,					 \
 		&adc_mspm0g3xxx_data_##index,				 \
