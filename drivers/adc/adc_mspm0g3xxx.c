@@ -23,27 +23,33 @@ LOG_MODULE_REGISTER(adc_mspm0g3xxx);
 #define ADC_CONTEXT_USES_KERNEL_TIMER
 #include "adc_context.h"
 
+/* This ADC implementation supports up to 12 registers for sequence conversion */
+#define ADC_MSPM0G3XXX_MEMRES_MAX		(12)
+/* Obtain max number of implemented channels from header file*/
+#define ADC_MSPM0G3XXX_CHANNEL_MAX		(ADC_SYS_NUM_ANALOG_CHAN)
+/* Definition to indicate an ADC channel hasn't been initialized*/
+#define ADC_MSPM0G3XXX_CHANNEL_NO_INIT	(0xFFFFFFFF)
+
 /** Internal sample time unit conversion entry. */
 struct adc_mspm0g3xxx_sample_time_entry {
 	uint16_t time_us;
 	uint8_t reg_value;
 };
 
-/** Maps standard unit sample times (us) to internal (raw hal_ti register) values */
-/*static const struct adc_mspm0g3xxx_sample_time_entry adc_g3xxx_sample_times[] = {
-	{ 2, 1 },
-};
-*/
-
 struct adc_mspm0g3xxx_data {
-	int8_t sampleTime0;
-	int8_t sampleTime1;
-	uint32_t channelMemCtl[ADC_SYS_NUM_ANALOG_CHAN];
 	struct adc_context ctx;
 	const struct device *dev;
 	uint16_t *buffer;
 	uint16_t *repeat_buffer;
-	struct k_sem adc_busy_sem;
+	
+	int32_t sampleTime0;
+	int32_t sampleTime1;
+	uint32_t channelMemCtl[ADC_MSPM0G3XXX_CHANNEL_MAX];
+	
+	uint32_t channels;
+	uint32_t resolution;
+	uint32_t channel_eoc;
+
 };
 
 struct adc_mspm0g3xxx_cfg {
@@ -61,8 +67,19 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 {
 	struct adc_mspm0g3xxx_data *data =
 		CONTAINER_OF(ctx, struct adc_mspm0g3xxx_data, ctx);
+	const struct device *dev = data->dev;
+	const struct adc_mspm0g3xxx_cfg *config = dev->config;
 
 	data->repeat_buffer = data->buffer;
+
+	 /* Enable ADC12 interrupt */
+    DL_ADC12_clearInterruptStatus((ADC12_Regs *)config->base, 
+				((1 << data->channel_eoc) << ADC12_CPU_INT_IMASK_MEMRESIFG0_OFS));
+	DL_ADC12_enableInterrupt((ADC12_Regs *)config->base, 
+				((1 << data->channel_eoc) << ADC12_CPU_INT_IMASK_MEMRESIFG0_OFS));
+    DL_ADC12_enableConversions((ADC12_Regs *)config->base);
+	
+	DL_ADC12_startConversion((ADC12_Regs *)config->base);
 }
 
 static void adc_context_update_buffer_pointer(struct adc_context *ctx,
@@ -111,14 +128,14 @@ static int adc_mspm0g3xxx_init(const struct device *dev)
 	data->sampleTime0 = -1;
 	data->sampleTime1 = -1;
 
-#ifdef UNDO
-	/* clear any previous events */
-	AUXADCDisable();
-	HWREG(AUX_EVCTL_BASE + AUX_EVCTL_O_EVTOMCUFLAGSCLR) =
-		(AUX_EVCTL_EVTOMCUFLAGS_AUX_ADC_IRQ | AUX_EVCTL_EVTOMCUFLAGS_AUX_ADC_DONE);
+	/* Initialize ADC channel configuration */
+	for (int i =0; i < ADC_MSPM0G3XXX_CHANNEL_MAX; i++)
+	{
+		data->channelMemCtl[i] = ADC_MSPM0G3XXX_CHANNEL_NO_INIT;
+	}
 
 	config->irq_cfg_func();
-#endif
+
 	adc_context_unlock_unconditionally(&data->ctx);
 	return 0;
 }
@@ -274,8 +291,8 @@ static int adc_mspm0g3xxx_channel_setup(const struct device *dev,
 	int samplingTime;
 	int vrefInit = 0;
 	
-	if (ch > ADC_SYS_NUM_ANALOG_CHAN) {
-		LOG_ERR("Channel 0x%X is not supported, max 0x%X", ch, ADC_SYS_NUM_ANALOG_CHAN);
+	if (ch > ADC_MSPM0G3XXX_CHANNEL_MAX) {
+		LOG_ERR("Channel 0x%X is not supported, max 0x%X", ch, ADC_MSPM0G3XXX_CHANNEL_MAX);
 		return -EINVAL;
 	}
 
@@ -354,22 +371,130 @@ static int adc_mspm0g3xxx_channel_setup(const struct device *dev,
 	return 0;
 }
 
-static int mspm0g3xxx_read(const struct device *dev,
-		       const struct adc_sequence *sequence,
-		       bool asynchronous,
-		       struct k_poll_signal *sig)
+static int adc_mspm0g3xx_configSequence(const struct device *dev)
 {
 	struct adc_mspm0g3xxx_data *data = dev->data;
-	int rv;
-	size_t exp_size;
+	const struct adc_mspm0g3xxx_cfg *config = dev->config;
+	uint32_t resolution;
+	uint32_t channels;
+	uint32_t memCtl_count;
+	uint8_t ch;
+	int error = 0;
 
-	if (sequence->resolution != 12) {
-		LOG_ERR("Only 12 Resolution is supported, but %d got",
-			sequence->resolution);
-		return -EINVAL;
+	resolution = 0;
+	switch (data->resolution)
+	{
+		case 12:
+			resolution |= DL_ADC12_SAMP_CONV_RES_12_BIT;
+		break;
+		case 10:
+			resolution |= DL_ADC12_SAMP_CONV_RES_10_BIT;
+		break;
+		case 8:
+			resolution |= DL_ADC12_SAMP_CONV_RES_8_BIT;
+		break;
+		default:
+			return -EINVAL;
+		break;
 	}
 
-	exp_size = sizeof(uint16_t);
+	/* Configure all enabled channels for the sequence */
+	channels = data->channels;
+	memCtl_count = 0;
+	while (channels) {
+		ch = find_lsb_set(channels) - 1;
+		if (ch >= ADC_MSPM0G3XXX_CHANNEL_MAX) {
+			LOG_ERR("ADC channel not available: %d", ch);
+			return -EINVAL;
+		}
+
+		if (data->channelMemCtl[ch] == ADC_MSPM0G3XXX_CHANNEL_NO_INIT)
+		{
+			LOG_ERR("ADC channel not initialized");
+			return -EINVAL;
+		}
+		/* Configure each MEMCTL register */
+		if (memCtl_count < ADC_MSPM0G3XXX_MEMRES_MAX)
+		{
+			DL_ADC12_configConversionMem((ADC12_Regs *)config->base, 
+										memCtl_count,
+        								(ch << ADC12_MEMCTL_CHANSEL_OFS), 
+										(data->channelMemCtl[ch] & ADC12_MEMCTL_VRSEL_MASK), 
+										(data->channelMemCtl[ch] & ADC12_MEMCTL_STIME_MASK),
+										DL_ADC12_AVERAGING_MODE_DISABLED,
+										DL_ADC12_BURN_OUT_SOURCE_DISABLED, 
+										DL_ADC12_TRIGGER_MODE_AUTO_NEXT, 
+										DL_ADC12_WINDOWS_COMP_MODE_DISABLED);	
+		}
+		else
+		{
+			LOG_ERR("Number of conversions exceed ADC MEM registers");
+			return -EINVAL;
+		}
+		memCtl_count++;
+		channels &= ~BIT(ch);
+	}
+
+	/* Get the last memory conversion register to stop sequence and 
+		trigger interrupt */
+	if (memCtl_count-1 != data->channel_eoc)
+	{
+		LOG_ERR("Configured ADC channels %d doesn't match requested %d", 
+				memCtl_count-1, data->channel_eoc);
+		return -EINVAL;
+	}
+	DL_ADC12_initSeqSample((ADC12_Regs *)config->base,
+							DL_ADC12_REPEAT_MODE_DISABLED, 
+							DL_ADC12_SAMPLING_SOURCE_AUTO, 
+							DL_ADC12_TRIG_SRC_SOFTWARE,
+							DL_ADC12_SEQ_START_ADDR_00, 
+							(data->channel_eoc) << ADC12_CTL2_ENDADD_OFS, 
+							resolution,
+							DL_ADC12_SAMP_CONV_DATA_FORMAT_UNSIGNED);
+	
+	return error;
+}
+
+static int mspm0g3xxx_read(const struct device *dev,
+		       const struct adc_sequence *sequence)
+{
+	struct adc_mspm0g3xxx_data *data = dev->data;
+	size_t exp_size;
+	int sequence_ret;
+	int ch_count;
+	
+	/* Validate resolution */
+	if ( (sequence->resolution != 12) &&
+		 (sequence->resolution != 10) &&
+		 (sequence->resolution != 8) )
+	{
+		LOG_ERR("ADC resolution %d not supported. Only 8/10/12 bits.",
+				sequence->resolution);
+		return -EINVAL;
+	}	
+	data->resolution = sequence->resolution;
+
+	/* Validate channel count */
+	data->channels = sequence->channels;
+	ch_count = POPCOUNT(data->channels);
+	if (ch_count == 0)
+	{
+		LOG_ERR("No ADC channels selected");
+		return -EINVAL;
+	}
+	else if (ch_count > ADC_MSPM0G3XXX_MEMRES_MAX)
+	{
+		LOG_ERR("ADC implementation supports up to %d channels per sequence", 
+				ADC_MSPM0G3XXX_MEMRES_MAX);
+		return -EINVAL;
+	}
+	else
+	{
+		data->channel_eoc = ch_count -1;
+	}
+
+	/* Validate buffer size */
+	exp_size = ch_count * sizeof(uint16_t);
 	if (sequence->options) {
 		exp_size *= (1 + sequence->options->extra_samplings);
 	}
@@ -382,17 +507,39 @@ static int mspm0g3xxx_read(const struct device *dev,
 
 	data->buffer = sequence->buffer;
 
-	adc_context_lock(&data->ctx, asynchronous, sig);
+	if (sequence->oversampling) {
+		LOG_ERR("Oversampling currently not supported");
+		return -ENOTSUP;
+	}
+
+	if (sequence->calibrate) {
+		LOG_ERR("Calibration currently not supported");
+		return -ENOTSUP;
+	}
+
+	/* Configure the ADC sequence */
+	sequence_ret = adc_mspm0g3xx_configSequence(dev);
+	if (sequence_ret < 0)
+	{
+		LOG_ERR("Error in ADC sequence configuration");
+		return sequence_ret;
+	}
+
 	adc_context_start_read(&data->ctx, sequence);
-	rv = adc_context_wait_for_completion(&data->ctx);
-	adc_context_release(&data->ctx, rv);
-	return rv;
+	return adc_context_wait_for_completion(&data->ctx);
 }
 
 static int adc_mspm0g3xxx_read(const struct device *dev,
 			   const struct adc_sequence *sequence)
 {
-	return mspm0g3xxx_read(dev, sequence, false, NULL);
+	struct adc_mspm0g3xxx_data *data = dev->data;
+	int error;
+
+	adc_context_lock(&data->ctx, false, NULL);
+	error = mspm0g3xxx_read(dev, sequence);
+	adc_context_release(&data->ctx, error);
+
+	return error;
 }
 
 #ifdef CONFIG_ADC_ASYNC
@@ -400,45 +547,47 @@ static int adc_mspm0g3xxx_read_async(const struct device *dev,
 				 const struct adc_sequence *sequence,
 				 struct k_poll_signal *async)
 {
-	return mspm0g3xxx_read(dev, sequence, true, async);
+	struct adc_mspm0g3xxx_data *data = dev->data;
+	int error;
+
+	adc_context_lock(&data->ctx, true, async);
+	error = mspm0g3xxx_read(dev, sequence);
+	adc_context_release(&data->ctx, error);
+	
+	return error;
 }
 #endif
 
-/**
- * AUX_ADC_IRQ handler, called for either of these events:
- * - conversion complete or DMA done (if used);
- * - FIFO underflow or overflow;
- */
 static void adc_mspm0g3xxx_isr(const struct device *dev)
 {
 	struct adc_mspm0g3xxx_data *data = dev->data;
-	/* get the statuses of ADC_DONE and ADC_IRQ events in order to clear them both */
- #ifdef UNDO	
- 	uint32_t ev_status = (
-		HWREG(AUX_EVCTL_BASE + AUX_EVCTL_O_EVTOMCUFLAGS) &
-		(AUX_EVCTL_EVTOMCUFLAGS_AUX_ADC_IRQ | AUX_EVCTL_EVTOMCUFLAGS_AUX_ADC_DONE)
-	);
+	const struct adc_mspm0g3xxx_cfg *config = dev->config;
+	int mem_ix;
 
-	uint32_t fifo_status;
-	uint32_t adc_value;
-
-	/* clear the AUXADC-related event flags */
-	HWREG(AUX_EVCTL_BASE + AUX_EVCTL_O_EVTOMCUFLAGSCLR) = ev_status;
-	/* check the ADC FIFO's status */
-	fifo_status = AUXADCGetFifoStatus();
-	LOG_DBG("ISR flags 0x%08X fifo 0x%08X", ev_status, fifo_status);
-	if ((fifo_status & (AUX_ANAIF_ADCFIFOSTAT_OVERFLOW | AUX_ANAIF_ADCFIFOSTAT_UNDERFLOW))) {
-		AUXADCFlushFifo();
-	}
-	if ((fifo_status & AUX_ANAIF_ADCFIFOSTAT_EMPTY_M)) {
-		/* no ADC values available */
-		return;
-	}
-	adc_value = AUXADCPopFifo();
-	LOG_DBG("ADC buf %04X val %d", (unsigned int)data->buffer, adc_value);
-	*data->buffer = adc_value;
-	AUXADCDisable();
-#endif
+	switch (DL_ADC12_getPendingInterrupt((ADC12_Regs *)config->base)) {
+        case DL_ADC12_IIDX_MEM0_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM1_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM2_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM3_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM4_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM5_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM6_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM7_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM8_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM9_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM10_RESULT_LOADED:
+		case DL_ADC12_IIDX_MEM11_RESULT_LOADED:
+			for (mem_ix = 0; mem_ix <= data->channel_eoc; mem_ix++)
+			{
+				 *data->buffer++ = DL_ADC12_getMemResult((ADC12_Regs *)config->base, 
+				 						mem_ix);
+			}
+            DL_ADC12_disableInterrupt((ADC12_Regs *)config->base, 
+				((1 << (data->channel_eoc)) << ADC12_CPU_INT_IMASK_MEMRESIFG0_OFS));
+            break;
+        default:
+            break;
+    }
 	adc_context_on_sampling_done(&data->ctx, dev);
 }
 
@@ -473,7 +622,11 @@ static const struct adc_driver_api mspm0g3xxx_driver_api##index = {			\
 	IF_ENABLED(CONFIG_ADC_ASYNC,											\
 		(.read_async = adc_mspm0g3xxx_read_async,))							\
 };																			\
-static struct adc_mspm0g3xxx_data adc_mspm0g3xxx_data_##index; 				\
+static struct adc_mspm0g3xxx_data adc_mspm0g3xxx_data_##index = {			\
+	ADC_CONTEXT_INIT_TIMER(adc_mspm0g3xxx_data_##index, ctx),					\
+	ADC_CONTEXT_INIT_LOCK(adc_mspm0g3xxx_data_##index, ctx),					\
+	ADC_CONTEXT_INIT_SYNC(adc_mspm0g3xxx_data_##index, ctx),					\
+};																			\
 DEVICE_DT_INST_DEFINE(index,						 						\
 	&adc_mspm0g3xxx_init, NULL,					 							\
 	&adc_mspm0g3xxx_data_##index,				 							\
