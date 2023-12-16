@@ -19,7 +19,14 @@ int pinctrl_configure_pins(const pinctrl_soc_pin_t *pins, uint8_t pin_cnt, uintp
         pin_cm = MSPM0_PINCM(pins[i].pinmux);
         pin_function = MSPM0_PIN_FUNCTION(pins[i].pinmux);
         iomux = pins[i].iomux;
-        DL_GPIO_initPeripheralFunction(pin_cm, (iomux | pin_function));
+        if (pin_function == 0x00)
+        {
+            DL_GPIO_initPeripheralAnalogFunction(pin_cm);
+        }
+        else
+        {
+            DL_GPIO_initPeripheralFunction(pin_cm, (iomux | pin_function));
+        }
     }
 
     return 0;
