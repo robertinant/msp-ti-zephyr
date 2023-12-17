@@ -47,7 +47,8 @@ struct adc_mspm0g3xxx_data {
 	uint32_t channelMemCtl[ADC_MSPM0G3XXX_CHANNEL_MAX];
 	
 	uint32_t channels;
-	uint32_t resolution;
+	uint8_t resolution;
+	uint16_t oversampling; 
 	uint32_t channel_eoc;
 
 };
@@ -375,23 +376,70 @@ static int adc_mspm0g3xx_configSequence(const struct device *dev)
 {
 	struct adc_mspm0g3xxx_data *data = dev->data;
 	const struct adc_mspm0g3xxx_cfg *config = dev->config;
-	uint32_t resolution;
+	uint32_t resolution_regVal;
+	uint32_t avg_enabled_regVal, avg_acc_regVal, avg_div_regVal;
 	uint32_t channels;
 	uint32_t memCtl_count;
 	uint8_t ch;
 	int error = 0;
 
-	resolution = 0;
+	resolution_regVal = 0;
 	switch (data->resolution)
 	{
 		case 12:
-			resolution |= DL_ADC12_SAMP_CONV_RES_12_BIT;
+			resolution_regVal |= DL_ADC12_SAMP_CONV_RES_12_BIT;
 		break;
 		case 10:
-			resolution |= DL_ADC12_SAMP_CONV_RES_10_BIT;
+			resolution_regVal |= DL_ADC12_SAMP_CONV_RES_10_BIT;
 		break;
 		case 8:
-			resolution |= DL_ADC12_SAMP_CONV_RES_8_BIT;
+			resolution_regVal |= DL_ADC12_SAMP_CONV_RES_8_BIT;
+		break;
+		default:
+			return -EINVAL;
+		break;
+	}
+
+	avg_enabled_regVal = 0;
+	switch (data->oversampling)
+	{
+		case 0:
+			avg_enabled_regVal = DL_ADC12_AVERAGING_MODE_DISABLED;
+		break;
+		case 2:
+			avg_enabled_regVal = DL_ADC12_AVERAGING_MODE_ENABLED;
+			avg_acc_regVal = DL_ADC12_HW_AVG_NUM_ACC_2;
+			avg_div_regVal = DL_ADC12_HW_AVG_DEN_DIV_BY_2;
+		break;
+		case 4:
+			avg_enabled_regVal = DL_ADC12_AVERAGING_MODE_ENABLED;
+			avg_acc_regVal = DL_ADC12_HW_AVG_NUM_ACC_4;
+			avg_div_regVal = DL_ADC12_HW_AVG_DEN_DIV_BY_4;
+		break;
+		case 8:
+			avg_enabled_regVal = DL_ADC12_AVERAGING_MODE_ENABLED;
+			avg_acc_regVal = DL_ADC12_HW_AVG_NUM_ACC_8;
+			avg_div_regVal = DL_ADC12_HW_AVG_DEN_DIV_BY_8;
+		break;
+		case 16:
+			avg_enabled_regVal = DL_ADC12_AVERAGING_MODE_ENABLED;
+			avg_acc_regVal = DL_ADC12_HW_AVG_NUM_ACC_16;
+			avg_div_regVal = DL_ADC12_HW_AVG_DEN_DIV_BY_16;
+		break;
+		case 32:
+			avg_enabled_regVal = DL_ADC12_AVERAGING_MODE_ENABLED;
+			avg_acc_regVal = DL_ADC12_HW_AVG_NUM_ACC_32;
+			avg_div_regVal = DL_ADC12_HW_AVG_DEN_DIV_BY_32;
+		break;
+		case 64:
+			avg_enabled_regVal = DL_ADC12_AVERAGING_MODE_ENABLED;
+			avg_acc_regVal = DL_ADC12_HW_AVG_NUM_ACC_64;
+			avg_div_regVal = DL_ADC12_HW_AVG_DEN_DIV_BY_64;
+		break;
+		case 128:
+			avg_enabled_regVal = DL_ADC12_AVERAGING_MODE_ENABLED;
+			avg_acc_regVal = DL_ADC12_HW_AVG_NUM_ACC_128;
+			avg_div_regVal = DL_ADC12_HW_AVG_DEN_DIV_BY_128;
 		break;
 		default:
 			return -EINVAL;
@@ -421,7 +469,7 @@ static int adc_mspm0g3xx_configSequence(const struct device *dev)
         								(ch << ADC12_MEMCTL_CHANSEL_OFS), 
 										(data->channelMemCtl[ch] & ADC12_MEMCTL_VRSEL_MASK), 
 										(data->channelMemCtl[ch] & ADC12_MEMCTL_STIME_MASK),
-										DL_ADC12_AVERAGING_MODE_DISABLED,
+										avg_enabled_regVal,
 										DL_ADC12_BURN_OUT_SOURCE_DISABLED, 
 										DL_ADC12_TRIGGER_MODE_AUTO_NEXT, 
 										DL_ADC12_WINDOWS_COMP_MODE_DISABLED);	
@@ -433,6 +481,20 @@ static int adc_mspm0g3xx_configSequence(const struct device *dev)
 		}
 		memCtl_count++;
 		channels &= ~BIT(ch);
+	}
+
+	/* Configure HW averaging (oversampling) */
+	if (avg_enabled_regVal == DL_ADC12_AVERAGING_MODE_ENABLED)
+	{
+		DL_ADC12_configHwAverage( (ADC12_Regs *)config->base,
+								  avg_acc_regVal, 
+								  avg_div_regVal);
+	}
+	else
+	{
+		DL_ADC12_configHwAverage( (ADC12_Regs *)config->base,
+								  DL_ADC12_HW_AVG_NUM_ACC_DISABLED, 
+								  DL_ADC12_HW_AVG_DEN_DIV_BY_1);
 	}
 
 	/* Get the last memory conversion register to stop sequence and 
@@ -449,7 +511,7 @@ static int adc_mspm0g3xx_configSequence(const struct device *dev)
 							DL_ADC12_TRIG_SRC_SOFTWARE,
 							DL_ADC12_SEQ_START_ADDR_00, 
 							(data->channel_eoc) << ADC12_CTL2_ENDADD_OFS, 
-							resolution,
+							resolution_regVal,
 							DL_ADC12_SAMP_CONV_DATA_FORMAT_UNSIGNED);
 	
 	return error;
@@ -507,13 +569,24 @@ static int mspm0g3xxx_read(const struct device *dev,
 
 	data->buffer = sequence->buffer;
 
-	if (sequence->oversampling) {
-		LOG_ERR("Oversampling currently not supported");
-		return -ENOTSUP;
-	}
+	/* Validate oversampling */
+	if ( (sequence->oversampling != 0) &&
+		 (sequence->oversampling != 2) &&
+		 (sequence->oversampling != 4) &&
+		 (sequence->oversampling != 8) &&
+		 (sequence->oversampling != 16) &&
+		 (sequence->oversampling != 32) &&
+		 (sequence->oversampling != 64) &&
+		 (sequence->oversampling != 128) )
+	{
+		LOG_ERR("ADC oversampling %d not supported. Only 2/4/8/16/32/64/128.",
+				sequence->oversampling);
+		return -EINVAL;
+	}	
+	data->oversampling = sequence->oversampling;
 
 	if (sequence->calibrate) {
-		LOG_ERR("Calibration currently not supported");
+		LOG_ERR("Calibration not supported");
 		return -ENOTSUP;
 	}
 
