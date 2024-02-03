@@ -5,7 +5,6 @@
 #include <zephyr/dt-bindings/i2c/i2c.h>
 
 / {
-
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -31,35 +30,26 @@
 	};
 
 	soc {
+		gpioa: gpio@400a0000 {
+			compatible = "ti,mspm0g3xxx-gpio";
+			reg = <0x400a0000 0x2000>;
+			interrupts = <1 0>;
+			status = "disabled";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
 
-		pinctrl: pin-controller@400a0000{
-			compatible = "ti,mspm0-pinctrl";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			reg = <0x400a0000 0x4000>;
-
-			gpioa: gpio@400a0000 {
-				compatible = "ti,mspm0-gpio";
-				reg = <0x400a0000 0x2000>;
-				interrupts = <1 0>;
-				status = "disabled";
-				gpio-controller;
-				#gpio-cells = <2>;
-			};
-
-			gpiob: gpio@400a2000 {
-				compatible = "ti,mspm0-gpio";
-				reg = <0x400a2000 0x2000>;
-				interrupts = <1 0>;
-				status = "disabled";
-				gpio-controller;
-				#gpio-cells = <2>;
-			};
-
+		gpiob: gpio@400a2000 {
+			compatible = "ti,mspm0g3xxx-gpio";
+			reg = <0x400a2000 0x2000>;
+			interrupts = <1 0>;
+			status = "disabled";
+			gpio-controller;
+			#gpio-cells = <2>;
 		};
 
 		uart0: uart@40108000 {
-			compatible = "ti,mspm0-uart";
+			compatible = "ti,mspm0g3xxx-uart";
 			reg = <0x40108000 0x2000>;
 			interrupts = <15 0>;
 			clocks = <&sysclk>;

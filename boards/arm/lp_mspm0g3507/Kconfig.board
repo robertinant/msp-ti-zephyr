@@ -1,0 +1,8 @@
+# TI LP_MSPM0G3507 Development Board
+
+# Copyright (c) 2024 Texas Instruments
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_LP_MSPM0G3507
+	bool "TI LP_MSPM0G3507"
+	depends on SOC_MSPM0G3507
