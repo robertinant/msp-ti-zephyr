@@ -125,6 +125,7 @@ source "drivers/adc/Kconfig.ad559x"
 source "drivers/adc/Kconfig.ltc2451"
 
 source "drivers/adc/Kconfig.numaker"
+source "drivers/adc/Kconfig.mspm0g3xxx"
 
 source "drivers/adc/Kconfig.ene"
 
