@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2024 Texas Instruments
+
+source "soc/arm/ti_mspm0/*/Kconfig.defconfig.series"
