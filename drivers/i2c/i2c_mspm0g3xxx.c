@@ -23,7 +23,7 @@ LOG_MODULE_REGISTER(i2c_mspm0g3xxx);
 #include <ti/driverlib/dl_gpio.h>
 
 #define TI_MSPM0G_TARGET_INTERRUPTS                                                                \
-	(DL_I2C_INTERRUPT_TARGET_RXFIFO_TRIGGER | DL_I2C_INTERRUPT_TARGET_TXFIFO_TRIGGER |         \
+	(DL_I2C_INTERRUPT_TARGET_RX_DONE | DL_I2C_INTERRUPT_TARGET_TXFIFO_TRIGGER |         \
 	 DL_I2C_INTERRUPT_TARGET_TXFIFO_EMPTY | DL_I2C_INTERRUPT_TARGET_START |                    \
 	 DL_I2C_INTERRUPT_TARGET_STOP)
 
@@ -284,6 +284,7 @@ static int i2c_mspm0g3xxx_target_register(const struct device *dev,
 	DL_I2C_enableTargetTXTriggerInTXMode((I2C_Regs *)config->base);
 	DL_I2C_enableTargetTXEmptyOnTXRequest((I2C_Regs *)config->base);
 
+
 	/* reconfigure the interrupt to use a slave isr? */
 	DL_I2C_disableInterrupt(
 		(I2C_Regs *)config->base,
@@ -416,7 +417,7 @@ static void i2c_mspm0g3xxx_isr(const struct device *dev)
 			DL_I2C_flushTargetTXFIFO((I2C_Regs *)config->base);
 		}
 		break;
-	case DL_I2C_IIDX_TARGET_RXFIFO_TRIGGER:
+	case DL_I2C_IIDX_TARGET_RX_DONE:
 		if (data->state == I2C_mspm0g3xxx_TARGET_STARTED) {
 			data->state = I2C_mspm0g3xxx_TARGET_RX_INPROGRESS;
 			if (data->target_callbacks->write_requested != NULL) {
@@ -435,9 +436,17 @@ static void i2c_mspm0g3xxx_isr(const struct device *dev)
 					data->target_rx_valid =
 						data->target_callbacks->write_received(
 							data->target_config, nextByte);
+
+					if(data->target_rx_valid == 0){
+						DL_I2C_setTargetACKOverrideValue((I2C_Regs *)config->base, DL_I2C_TARGET_RESPONSE_OVERRIDE_VALUE_ACK);
+					} else {
+						DL_I2C_setTargetACKOverrideValue((I2C_Regs *)config->base, DL_I2C_TARGET_RESPONSE_OVERRIDE_VALUE_NACK);
+					}
+
 				} else {
 					/* Prevent overflow and just ignore data */
 					DL_I2C_receiveTargetData((I2C_Regs *)config->base);
+					DL_I2C_setTargetACKOverrideValue((I2C_Regs *)config->base, DL_I2C_TARGET_RESPONSE_OVERRIDE_VALUE_NACK);
 				}
 			}
 		}
@@ -493,7 +502,7 @@ static void i2c_mspm0g3xxx_isr(const struct device *dev)
 		}
 		break;
 	/* Not implemented */
-	case DL_I2C_IIDX_TARGET_RX_DONE:
+	case DL_I2C_IIDX_TARGET_RXFIFO_TRIGGER:
 	case DL_I2C_IIDX_TARGET_RXFIFO_FULL:
 	case DL_I2C_IIDX_TARGET_GENERAL_CALL:
 	case DL_I2C_IIDX_TARGET_EVENT1_DMA_DONE:
