@@ -7,3 +7,9 @@ config I2C_MSPM0
 	depends on DT_HAS_TI_MSPM0_I2C_ENABLED
 	help
 	  Enable support for I2C on the TI MSPM0 series.
+
+config I2C_MSPM0_MULTI_TARGET_ADDRESS
+	bool "TI I2C MSPM0 Multi Target Address Support"
+	default n 
+	help 
+		Enable multi-target adddress on MSPM0 using secondary address and mask

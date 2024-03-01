@@ -55,6 +55,12 @@ struct i2c_mspm0_data {
 	volatile enum i2c_mspm0_state state; /* Current state of I2C transmission */
 	struct i2c_msg msg;                       /* Cache msg */
 	uint16_t addr;                            /* Cache slave address */
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+	uint16_t secondaryAddr;					  /* Secondary slave address */
+	uint16_t secondaryDontCareMask;			  /* Secondary don't care mask. Muxed
+												 with the secondary address to create
+												 a range of acceptable addresses */
+#endif
 	uint32_t count;                           /* Count for progress in I2C transmission */
 	uint32_t dev_config;                      /* Configuration last passed */
 	uint32_t is_target;
@@ -241,26 +247,52 @@ static int i2c_mspm0_target_register(const struct device *dev,
 		return -ENOTSUP;
 	}
 
+
 	k_sem_take(&data->i2c_busy_sem, K_FOREVER);
 
 	if (data->is_target == true) {
 		/* device is already configured as a target */
 		if (target_config != data->target_config) {
-			/* a new target configuration has been given. Reconfigure
-			 * address and callbacks
-			 */
-			DL_I2C_disableInterrupt((I2C_Regs *)config->base,
-						TI_MSPM0G_TARGET_INTERRUPTS);
-			DL_I2C_disableTarget((I2C_Regs *)config->base);
-			DL_I2C_setTargetOwnAddress((I2C_Regs *)config->base,
-						   target_config->address);
-			data->target_config = target_config;
-			data->target_callbacks = target_config->callbacks;
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+			if (target_config->flags & I2C_TARGET_FLAGS_SECONDARY_ADDR){
+				/* parse the 8 - bit mask into don't care portion and
+				 * the address itself secondary address in the form:
+				 * mask | address. For example, if the value in address is
+				 * 0x031A, the range of addresses accepted is
+				 * 0'b00110XX, such that 0x18, 0x19, 0x1A, and 0x1B are matched.
+				 */
 
-			if (data->state == I2C_mspm0_TARGET_PREEMPTED) {
-				DL_I2C_clearInterruptStatus((I2C_Regs *)config->base,
-							    TI_MSPM0G_TARGET_INTERRUPTS);
-			}
+				data->secondaryAddr = target_config->address & 0xFF;
+				uint32_t secondaryMask = (0x0000FF00 & (uint32_t) target_config->address) >> 8;
+				DL_I2C_setTargetOwnAddressAlternate((I2C_Regs *)config->base, data->secondaryAddr);
+				DL_I2C_setTargetOwnAddressAlternateMask((I2C_Regs *)config->base, secondaryMask);
+				DL_I2C_enableTargetOwnAddressAlternate((I2C_Regs *)config->base);
+
+			} else {
+#endif
+				/* a new primary target configuration has been given. Reconfigure
+				* address and callbacks
+				*/
+				DL_I2C_disableInterrupt((I2C_Regs *)config->base,
+							TI_MSPM0G_TARGET_INTERRUPTS);
+				DL_I2C_disableTarget((I2C_Regs *)config->base);
+
+				DL_I2C_setTargetOwnAddress((I2C_Regs *)config->base,
+							target_config->address);
+				data->target_config = target_config;
+				data->target_callbacks = target_config->callbacks;
+
+				/* clear a previous secondary configuration */
+				data->secondaryAddr = 0x00;
+				DL_I2C_disableTargetOwnAddressAlternate((I2C_Regs *)config->base);
+
+				if (data->state == I2C_mspm0_TARGET_PREEMPTED) {
+					DL_I2C_clearInterruptStatus((I2C_Regs *)config->base,
+									TI_MSPM0G_TARGET_INTERRUPTS);
+				}
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+			} // if (target_config->flags & I2C_TARGET_FLAGS_SECONDARY_ADDR)
+#endif
 		}
 		k_sem_give(&data->i2c_busy_sem);
 
@@ -277,6 +309,9 @@ static int i2c_mspm0_target_register(const struct device *dev,
 	data->dev_config &= ~I2C_MODE_CONTROLLER;
 	data->is_target = true;
 	data->state = I2C_mspm0_IDLE;
+	/* clear a the secondary configuration */
+	data->secondaryAddr = 0x00;
+	DL_I2C_disableTargetOwnAddressAlternate((I2C_Regs *)config->base);
 
 	DL_I2C_setTargetOwnAddress((I2C_Regs *)config->base, target_config->address);
 	DL_I2C_setTargetTXFIFOThreshold((I2C_Regs *)config->base, DL_I2C_TX_FIFO_LEVEL_BYTES_1);
@@ -421,6 +456,11 @@ static void i2c_mspm0_isr(const struct device *dev)
 		if (data->state == I2C_mspm0_TARGET_STARTED) {
 			data->state = I2C_mspm0_TARGET_RX_INPROGRESS;
 			if (data->target_callbacks->write_requested != NULL) {
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+				if(data->secondaryAddr != 0x00){
+					data->target_config->address = DL_I2C_getTargetAddressMatch((I2C_Regs *)config->base);
+				}
+#endif
 				data->target_rx_valid = data->target_callbacks->write_requested(
 					data->target_config);
 			}
@@ -457,7 +497,11 @@ static void i2c_mspm0_isr(const struct device *dev)
 		/* Fill TX FIFO if there are more bytes to send */
 		if (data->target_callbacks->read_requested != NULL) {
 			uint8_t nextByte;
-
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+			if(data->secondaryAddr != 0x00){
+				data->target_config->address = DL_I2C_getTargetAddressMatch((I2C_Regs *)config->base);
+			}
+#endif
 			data->target_tx_valid = data->target_callbacks->read_requested(
 				data->target_config, &nextByte);
 			if (data->target_tx_valid == 0) {

@@ -31,8 +31,10 @@
 
 uint32_t i2c_cfg = I2C_SPEED_SET(I2C_SPEED_STANDARD) | I2C_MODE_CONTROLLER;
 
-uint8_t txBuffer[MAX_I2C_BUFFER_SIZE] = {0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8,
-						0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8};
+uint16_t matchedAddress = 0x00;
+
+uint8_t txBuffer[MAX_I2C_BUFFER_SIZE] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+						0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18};
 uint32_t txBufIndex = 0;
 
 uint8_t rxBuffer[MAX_I2C_BUFFER_SIZE];
@@ -48,6 +50,7 @@ static int i2c_stop_callback(struct i2c_target_config * cfg){
 }
 
 static int i2c_read_requested(struct i2c_target_config * cfg, uint8_t *initVal){
+	matchedAddress = cfg->address;
 	if(txBufIndex < MAX_I2C_BUFFER_SIZE){
 		*initVal = txBuffer[txBufIndex];
 		txBufIndex++;
@@ -68,6 +71,7 @@ static int i2c_read_processed(struct i2c_target_config *cfg, uint8_t *nextByte){
 }
 
 static int i2c_write_requested(struct i2c_target_config *cfg){
+	matchedAddress = cfg->address;
 	if(rxBufIndex < MAX_I2C_BUFFER_SIZE) {
 		return 0;
 	} else {
@@ -98,6 +102,13 @@ struct i2c_target_config i2c_target_cfg_data = {
 	.address = 0x48,
 	.callbacks = &i2c_callbacks_data,
 };
+
+struct i2c_target_config i2c_target_cfg_secondary_data = {
+	.flags = 0x2, /* marks the configuration as a secondary address */
+	.address = (0x03 << 8) | 0x30, /* mask left shifted in upper 8 bits, and secondary address lower 8 bits */
+	.callbacks = &i2c_callbacks_data, /* ignored */
+};
+
 
 static int test_i2c_data(void)
 {
@@ -135,13 +146,26 @@ static int test_i2c_data(void)
 	}
 	k_sleep(K_MSEC(1));
 
+	/* NOTE: secondary address is denoted by flag (0x2) in the config file
+	 * and MUST be done after the primary configuration. A change to the
+	 * primary address while already configured in target mode requires the
+	 * secondary address to be re-registered.
+	 * During an unregistration and re-registering, It is important to first add
+	 * the primary address config and then add the secondary afterwards.
+	 */
+	if (i2c_target_register(i2c_dev, &i2c_target_cfg_secondary_data)) {
+		TC_PRINT("Fail to add secondary address\n");
+		return TC_FAIL;
+	}
+	k_sleep(K_MSEC(1));
+
 	for(int j = 4; j > 0; j--)
 	{
 		TC_PRINT("Waiting to recieve data from master. Transactions remaining: %d\n", j);
 
 		k_sem_take(&my_sem, K_FOREVER);
 
-		TC_PRINT("Master data received.\n");
+		TC_PRINT("Master data received for address: %x\n", matchedAddress);
 		/* print and reset buffers for the next transaction */
 		if(txBufIndex > 0){
 			TC_PRINT("Device transmitted: ");
