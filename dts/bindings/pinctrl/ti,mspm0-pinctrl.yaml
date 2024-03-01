@@ -1,4 +1,4 @@
-# Copyright (c) 2022 Vaishnav Achath
+# Copyright (c) 2024 Texas Instruments
 # SPDX-License-Identifier: Apache-2.0
 
 description: |
@@ -65,7 +65,7 @@ description: |
 
     These are obtained from the device-specific datasheet.
 
-compatible: "ti,mspm0g3xxx-pinctrl"
+compatible: "ti,mspm0-pinctrl"
 
 include: base.yaml
 

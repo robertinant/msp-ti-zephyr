@@ -200,7 +200,7 @@ source "drivers/serial/Kconfig.leuart_gecko"
 
 source "drivers/serial/Kconfig.msp432p4xx"
 
-source "drivers/serial/Kconfig.mspm0g3xxx"
+source "drivers/serial/Kconfig.mspm0"
 
 source "drivers/serial/Kconfig.numicro"
 

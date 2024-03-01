@@ -6,10 +6,9 @@
 
 #include <zephyr/init.h>
 #include <zephyr/drivers/pinctrl.h>
-
 #include <ti/driverlib/dl_gpio.h>
 
-#define DT_DRV_COMPAT ti_mspm0g3xxx_pinctrl
+#define DT_DRV_COMPAT ti_mspm0_pinctrl
 
 #define MSPM0_PINCM(pinmux)        (pinmux >> 0x10)
 #define MSPM0_PIN_FUNCTION(pinmux) (pinmux & 0x3F)

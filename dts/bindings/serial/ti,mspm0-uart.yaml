@@ -1,6 +1,6 @@
-description: TI MSPM0G3XXX UART
+description: TI MSPM0 UART
 
-compatible: "ti,mspm0g3xxx-uart"
+compatible: "ti,mspm0-uart"
 
 include: [uart-controller.yaml, pinctrl-device.yaml, base.yaml]
 
