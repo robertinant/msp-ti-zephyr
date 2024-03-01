@@ -1,0 +1,8 @@
+# TI LP_MSPM0L2228 development board configuration
+
+# Copyright (c) 2024 Texas Instruments
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD
+	default "lp_mspm0l2228"
+	depends on BOARD_LP_MSPM0L2228

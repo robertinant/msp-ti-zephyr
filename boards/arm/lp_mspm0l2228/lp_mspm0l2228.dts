@@ -2,14 +2,14 @@
 
 /dts-v1/;
 
-#include <ti/mspm0g3507.dtsi>
-#include <ti/mspm0/mspm0g3507-pinctrl.dtsi>
+#include <ti/mspm0l2228.dtsi>
+#include <ti/mspm0/mspm0l2228-pinctrl.dtsi>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 
 / {
-	model = "TI LP_MSPM0G3507";
-	compatible = "ti,lp_mspm0g3507","ti,mspm0g3507",
-				  "ti,mspm0g3xxx";
+	model = "TI LP_MSPM0L2228";
+	compatible = "ti,lp_mspm0l2228","ti,mspm0l2228",
+				  "ti,mspm0l2xxx";
 
 	aliases {
 		led0 = &led0;
@@ -23,21 +23,20 @@
 		zephyr,flash = &flash0;
 		zephyr,console = &uart0;
 		zephyr,shell-uart = &uart0;
-		zephyr,canbus = &canfd0;
 	};
 
 	leds {
 		compatible = "gpio-leds";
 		led0: led_0 {
-			gpios = <&gpiob 22 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpioa 23 GPIO_ACTIVE_HIGH>;
 			label = "Blue LED";
 		};
 		led1: led_1 {
-			gpios = <&gpiob 26 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpiob 10 GPIO_ACTIVE_HIGH>;
 			label = "Red LED";
 		};
 		led2: led_2 {
-			gpios = <&gpiob 27 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpiob 9 GPIO_ACTIVE_HIGH>;
 			label = "Green LED";
 		};
 	};
@@ -45,7 +44,7 @@
 	keys {
 		compatible = "gpio-keys";
 		btn0: btn_0 {
-			gpios = <&gpiob 21 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			gpios = <&gpiob 8 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 			label = "Switch 3";
 			zephyr,code = <INPUT_KEY_0>;
 		};
@@ -69,6 +68,10 @@
 	status = "okay";
 };
 
+&gpioc {
+	status = "okay";
+};
+
 &uart0 {
 	current-speed = <9600>;
 	pinctrl-0 = <&uart0_tx_pa10 &uart0_rx_pa11>;
@@ -76,14 +79,8 @@
 	status = "okay";
 };
 
-&i2c0 {
-	pinctrl-0 = <&i2c0_scl_pa1_pull_up &i2c0_sda_pa0_pull_up>;
-	pinctrl-names = "default";
-	status = "disabled";
-};
-
 &i2c1 {
-	pinctrl-0 = <&i2c1_scl_pb2_pull_up &i2c1_sda_pb3_pull_up>;
+	pinctrl-0 = <&i2c1_scl_pa17_pull_up &i2c1_sda_pa18_pull_up>;
 	pinctrl-names = "default";
 	status = "disabled";
 };
@@ -93,25 +90,7 @@
 	ti,clk-divider = <8>;
 	ti,clk-range = <MSP_ADC_CLOCK_RANGE_24TO32>;
 	vref-mv = <2500>;
-	pinctrl-0 = <&adc0_pa25 &adc0_pb24>;
+	pinctrl-0 = <&adc0_pa25>;
 	pinctrl-names = "default";
-	status = "disabled";
-};
-
-&adc1 {
-	ti,clk-source = <MSP_ADC_CLOCK_ULPCLK>;
-	ti,clk-divider = <8>;
-	ti,clk-range = <MSP_ADC_CLOCK_RANGE_24TO32>;
-	vref-mv = <2500>;
-	pinctrl-0 = <&adc1_pb19>;
-	pinctrl-names = "default";
-	status = "disabled";
-};
-
-&canfd0 {
-	pinctrl-0 = <&can0_rx_pa13 &can0_tx_pa12>;
-	pinctrl-names = "default";
-	bus-speed = <125000>;
-	bus-speed-data = <1000000>;
 	status = "disabled";
 };
