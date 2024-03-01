@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2024 Texas Instruments
 
-config CAN_MSPM0G3XXX_CANFD
-	bool "MSPM0G3XXX CANFD driver"
+config CAN_MSPM0_CANFD
+	bool "MSPM0 CANFD driver"
 	default y
-	depends on DT_HAS_TI_MSPM0G3XXX_CANFD_ENABLED
+	depends on DT_HAS_TI_MSPM0_CANFD_ENABLED
 	select CAN_MCAN
 	help
-	  Enable support for CANFD on the TI MSPM0G3XXX series.
+	  Enable support for CANFD on the TI MSPM0 series.
 
-if CAN_MSPM0G3XXX_CANFD
+if CAN_MSPM0_CANFD
 
 config CAN_MAX_STD_ID_FILTER
 	int "Maximum number of standard (11-bit) ID filters"

@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT ti_mspm0g3xxx_adc
+#define DT_DRV_COMPAT ti_mspm0_adc12
 
 #include <errno.h>
 
 #define LOG_LEVEL CONFIG_ADC_LOG_LEVEL
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(adc_mspm0g3xxx);
+LOG_MODULE_REGISTER(adc_mspm0);
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
@@ -28,19 +28,19 @@ LOG_MODULE_REGISTER(adc_mspm0g3xxx);
 #include "adc_context.h"
 
 /* This ADC implementation supports up to 12 registers for sequence conversion */
-#define ADC_MSPM0G3XXX_MEMRES_MAX      (12)
+#define ADC_MSPM0_MEMRES_MAX      (12)
 /* Obtain max number of implemented channels from header file*/
-#define ADC_MSPM0G3XXX_CHANNEL_MAX     (ADC_SYS_NUM_ANALOG_CHAN)
+#define ADC_MSPM0_CHANNEL_MAX     (ADC_SYS_NUM_ANALOG_CHAN)
 /* Definition to indicate an ADC channel hasn't been initialized*/
-#define ADC_MSPM0G3XXX_CHANNEL_NO_INIT (0xFFFFFFFF)
+#define ADC_MSPM0_CHANNEL_NO_INIT (0xFFFFFFFF)
 
 /** Internal sample time unit conversion entry. */
-struct adc_mspm0g3xxx_sample_time_entry {
+struct adc_mspm0_sample_time_entry {
 	uint16_t time_us;
 	uint8_t reg_value;
 };
 
-struct adc_mspm0g3xxx_data {
+struct adc_mspm0_data {
 	struct adc_context ctx;
 	const struct device *dev;
 	uint16_t *buffer;
@@ -48,7 +48,7 @@ struct adc_mspm0g3xxx_data {
 
 	int32_t sampleTime0;
 	int32_t sampleTime1;
-	uint32_t channelMemCtl[ADC_MSPM0G3XXX_CHANNEL_MAX];
+	uint32_t channelMemCtl[ADC_MSPM0_CHANNEL_MAX];
 
 	uint32_t channels;
 	uint8_t resolution;
@@ -56,20 +56,20 @@ struct adc_mspm0g3xxx_data {
 	uint32_t channel_eoc;
 };
 
-struct adc_mspm0g3xxx_cfg {
+struct adc_mspm0_cfg {
 	uint32_t base;
 	DL_ADC12_ClockConfig ADCClockConfig;
 	const struct pinctrl_dev_config *pinctrl;
 	void (*irq_cfg_func)(void);
 };
 
-static void adc_mspm0g3xxx_isr(const struct device *dev);
+static void adc_mspm0_isr(const struct device *dev);
 
 static void adc_context_start_sampling(struct adc_context *ctx)
 {
-	struct adc_mspm0g3xxx_data *data = CONTAINER_OF(ctx, struct adc_mspm0g3xxx_data, ctx);
+	struct adc_mspm0_data *data = CONTAINER_OF(ctx, struct adc_mspm0_data, ctx);
 	const struct device *dev = data->dev;
-	const struct adc_mspm0g3xxx_cfg *config = dev->config;
+	const struct adc_mspm0_cfg *config = dev->config;
 
 	data->repeat_buffer = data->buffer;
 
@@ -86,7 +86,7 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 
 static void adc_context_update_buffer_pointer(struct adc_context *ctx, bool repeat)
 {
-	struct adc_mspm0g3xxx_data *data = CONTAINER_OF(ctx, struct adc_mspm0g3xxx_data, ctx);
+	struct adc_mspm0_data *data = CONTAINER_OF(ctx, struct adc_mspm0_data, ctx);
 
 	if (repeat) {
 		data->buffer = data->repeat_buffer;
@@ -95,10 +95,10 @@ static void adc_context_update_buffer_pointer(struct adc_context *ctx, bool repe
 	}
 }
 
-static int adc_mspm0g3xxx_init(const struct device *dev)
+static int adc_mspm0_init(const struct device *dev)
 {
-	struct adc_mspm0g3xxx_data *data = dev->data;
-	const struct adc_mspm0g3xxx_cfg *config = dev->config;
+	struct adc_mspm0_data *data = dev->data;
+	const struct adc_mspm0_cfg *config = dev->config;
 	int ret;
 
 	LOG_DBG("Initializing %s", dev->name);
@@ -128,8 +128,8 @@ static int adc_mspm0g3xxx_init(const struct device *dev)
 	data->sampleTime1 = -1;
 
 	/* Initialize ADC channel configuration */
-	for (int i = 0; i < ADC_MSPM0G3XXX_CHANNEL_MAX; i++) {
-		data->channelMemCtl[i] = ADC_MSPM0G3XXX_CHANNEL_NO_INIT;
+	for (int i = 0; i < ADC_MSPM0_CHANNEL_MAX; i++) {
+		data->channelMemCtl[i] = ADC_MSPM0_CHANNEL_NO_INIT;
 	}
 
 	config->irq_cfg_func();
@@ -138,7 +138,7 @@ static int adc_mspm0g3xxx_init(const struct device *dev)
 	return 0;
 }
 
-static int adc_mspm0g3xxx_validate_sampling_time(const struct device *dev, uint16_t acq_time)
+static int adc_mspm0_validate_sampling_time(const struct device *dev, uint16_t acq_time)
 {
 	if (acq_time == ADC_ACQ_TIME_DEFAULT) {
 		return 0;
@@ -168,7 +168,7 @@ static DL_VREF_Config gVREFConfig = {
 	.shCycleCount = DL_VREF_SH_MIN,
 };
 
-static int adc_mspm0g3xxx_config_Vref(int vref_source, int vref_val, uint32_t *memCtlConfig)
+static int adc_mspm0_config_Vref(int vref_source, int vref_val, uint32_t *memCtlConfig)
 {
 	int error = 0;
 	bool initVREF = false;
@@ -251,25 +251,25 @@ static int adc_mspm0g3xxx_config_Vref(int vref_source, int vref_val, uint32_t *m
 	return error;
 }
 
-static int adc_mspm0g3xxx_channel_setup(const struct device *dev,
+static int adc_mspm0_channel_setup(const struct device *dev,
 					const struct adc_channel_cfg *channel_cfg)
 {
-	struct adc_mspm0g3xxx_data *data = dev->data;
-	const struct adc_mspm0g3xxx_cfg *config = dev->config;
+	struct adc_mspm0_data *data = dev->data;
+	const struct adc_mspm0_cfg *config = dev->config;
 	const uint8_t ch = channel_cfg->channel_id;
 	const struct adc_driver_api *api = (struct adc_driver_api *)dev->api;
 	int samplingTime;
 	int vrefInit = 0;
 
-	if (ch > ADC_MSPM0G3XXX_CHANNEL_MAX) {
-		LOG_ERR("Channel 0x%X is not supported, max 0x%X", ch, ADC_MSPM0G3XXX_CHANNEL_MAX);
+	if (ch > ADC_MSPM0_CHANNEL_MAX) {
+		LOG_ERR("Channel 0x%X is not supported, max 0x%X", ch, ADC_MSPM0_CHANNEL_MAX);
 		return -EINVAL;
 	}
 
 	/* Initialize MEMCTL configuration to default */
 	data->channelMemCtl[ch] = 0;
 
-	samplingTime = adc_mspm0g3xxx_validate_sampling_time(dev, channel_cfg->acquisition_time);
+	samplingTime = adc_mspm0_validate_sampling_time(dev, channel_cfg->acquisition_time);
 	if (samplingTime < 0) {
 		return samplingTime;
 	}
@@ -303,7 +303,7 @@ static int adc_mspm0g3xxx_channel_setup(const struct device *dev,
 		return -EINVAL;
 	}
 
-	vrefInit = adc_mspm0g3xxx_config_Vref(channel_cfg->reference, api->ref_internal,
+	vrefInit = adc_mspm0_config_Vref(channel_cfg->reference, api->ref_internal,
 					      &data->channelMemCtl[ch]);
 	if (vrefInit < 0) {
 		LOG_ERR("Error configuring VREF");
@@ -331,8 +331,8 @@ static int adc_mspm0g3xxx_channel_setup(const struct device *dev,
 
 static int adc_mspm0g3xx_configSequence(const struct device *dev)
 {
-	struct adc_mspm0g3xxx_data *data = dev->data;
-	const struct adc_mspm0g3xxx_cfg *config = dev->config;
+	struct adc_mspm0_data *data = dev->data;
+	const struct adc_mspm0_cfg *config = dev->config;
 	uint32_t resolution_regVal;
 	uint32_t avg_enabled_regVal, avg_acc_regVal, avg_div_regVal;
 	uint32_t channels;
@@ -404,17 +404,17 @@ static int adc_mspm0g3xx_configSequence(const struct device *dev)
 	memCtl_count = 0;
 	while (channels) {
 		ch = find_lsb_set(channels) - 1;
-		if (ch >= ADC_MSPM0G3XXX_CHANNEL_MAX) {
+		if (ch >= ADC_MSPM0_CHANNEL_MAX) {
 			LOG_ERR("ADC channel not available: %d", ch);
 			return -EINVAL;
 		}
 
-		if (data->channelMemCtl[ch] == ADC_MSPM0G3XXX_CHANNEL_NO_INIT) {
+		if (data->channelMemCtl[ch] == ADC_MSPM0_CHANNEL_NO_INIT) {
 			LOG_ERR("ADC channel not initialized");
 			return -EINVAL;
 		}
 		/* Configure each MEMCTL register */
-		if (memCtl_count < ADC_MSPM0G3XXX_MEMRES_MAX) {
+		if (memCtl_count < ADC_MSPM0_MEMRES_MAX) {
 			DL_ADC12_configConversionMem(
 				(ADC12_Regs *)config->base, memCtl_count,
 				(ch << ADC12_MEMCTL_CHANSEL_OFS),
@@ -458,9 +458,9 @@ static int adc_mspm0g3xx_configSequence(const struct device *dev)
 	return error;
 }
 
-static int mspm0g3xxx_read(const struct device *dev, const struct adc_sequence *sequence)
+static int adc_mspm0_read_internal(const struct device *dev, const struct adc_sequence *sequence)
 {
-	struct adc_mspm0g3xxx_data *data = dev->data;
+	struct adc_mspm0_data *data = dev->data;
 	size_t exp_size;
 	int sequence_ret;
 	int ch_count;
@@ -480,9 +480,9 @@ static int mspm0g3xxx_read(const struct device *dev, const struct adc_sequence *
 	if (ch_count == 0) {
 		LOG_ERR("No ADC channels selected");
 		return -EINVAL;
-	} else if (ch_count > ADC_MSPM0G3XXX_MEMRES_MAX) {
+	} else if (ch_count > ADC_MSPM0_MEMRES_MAX) {
 		LOG_ERR("ADC implementation supports up to %d channels per sequence",
-			ADC_MSPM0G3XXX_MEMRES_MAX);
+			ADC_MSPM0_MEMRES_MAX);
 		return -EINVAL;
 	}
 
@@ -528,37 +528,37 @@ static int mspm0g3xxx_read(const struct device *dev, const struct adc_sequence *
 	return adc_context_wait_for_completion(&data->ctx);
 }
 
-static int adc_mspm0g3xxx_read(const struct device *dev, const struct adc_sequence *sequence)
+static int adc_mspm0_read(const struct device *dev, const struct adc_sequence *sequence)
 {
-	struct adc_mspm0g3xxx_data *data = dev->data;
+	struct adc_mspm0_data *data = dev->data;
 	int error;
 
 	adc_context_lock(&data->ctx, false, NULL);
-	error = mspm0g3xxx_read(dev, sequence);
+	error = adc_mspm0_read_internal(dev, sequence);
 	adc_context_release(&data->ctx, error);
 
 	return error;
 }
 
 #ifdef CONFIG_ADC_ASYNC
-static int adc_mspm0g3xxx_read_async(const struct device *dev, const struct adc_sequence *sequence,
+static int adc_mspm0_read_async(const struct device *dev, const struct adc_sequence *sequence,
 				     struct k_poll_signal *async)
 {
-	struct adc_mspm0g3xxx_data *data = dev->data;
+	struct adc_mspm0_data *data = dev->data;
 	int error;
 
 	adc_context_lock(&data->ctx, true, async);
-	error = mspm0g3xxx_read(dev, sequence);
+	error = adc_mspm0_read_internal(dev, sequence);
 	adc_context_release(&data->ctx, error);
 
 	return error;
 }
 #endif
 
-static void adc_mspm0g3xxx_isr(const struct device *dev)
+static void adc_mspm0_isr(const struct device *dev)
 {
-	struct adc_mspm0g3xxx_data *data = dev->data;
-	const struct adc_mspm0g3xxx_cfg *config = dev->config;
+	struct adc_mspm0_data *data = dev->data;
+	const struct adc_mspm0_cfg *config = dev->config;
 	int mem_ix;
 
 	switch (DL_ADC12_getPendingInterrupt((ADC12_Regs *)config->base)) {
@@ -594,38 +594,38 @@ static void adc_mspm0g3xxx_isr(const struct device *dev)
 
 #define ADC_DT_CLOCK_RANGE(x) DT_INST_PROP(x, ti_clk_range)
 
-#define MSPM0G3XXX_ADC_INIT(index)                                                                 \
+#define MSPM0_ADC_INIT(index)                                                                 \
                                                                                                    \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
                                                                                                    \
-	static void adc_mspm0g3xxx_cfg_func_##index(void);                                         \
+	static void adc_mspm0_cfg_func_##index(void);                                         \
                                                                                                    \
-	static const struct adc_mspm0g3xxx_cfg adc_mspm0g3xxx_cfg_##index = {                      \
+	static const struct adc_mspm0_cfg adc_mspm0_cfg_##index = {                      \
 		.base = DT_INST_REG_ADDR(index),                                                   \
-		.irq_cfg_func = adc_mspm0g3xxx_cfg_func_##index,                                   \
+		.irq_cfg_func = adc_mspm0_cfg_func_##index,                                   \
 		.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                  \
 		.ADCClockConfig = {.clockSel = ADC_DT_CLOCK_SOURCE(index),                         \
 				   .freqRange = ADC_DT_CLOCK_RANGE(index),                         \
 				   .divideRatio = ADC_DT_CLOCK_DIV(index)}};                       \
-	static const struct adc_driver_api mspm0g3xxx_driver_api##index = {                        \
-		.channel_setup = adc_mspm0g3xxx_channel_setup,                                     \
-		.read = adc_mspm0g3xxx_read,                                                       \
+	static const struct adc_driver_api mspm0_driver_api##index = {                        \
+		.channel_setup = adc_mspm0_channel_setup,                                     \
+		.read = adc_mspm0_read,                                                       \
 		.ref_internal = DT_INST_PROP(index, vref_mv),                                      \
-		IF_ENABLED(CONFIG_ADC_ASYNC, (.read_async = adc_mspm0g3xxx_read_async,))};        \
-	static struct adc_mspm0g3xxx_data adc_mspm0g3xxx_data_##index = {                          \
-		ADC_CONTEXT_INIT_TIMER(adc_mspm0g3xxx_data_##index, ctx),                          \
-		ADC_CONTEXT_INIT_LOCK(adc_mspm0g3xxx_data_##index, ctx),                           \
-		ADC_CONTEXT_INIT_SYNC(adc_mspm0g3xxx_data_##index, ctx),                           \
+		IF_ENABLED(CONFIG_ADC_ASYNC, (.read_async = adc_mspm0_read_async,))};        \
+	static struct adc_mspm0_data adc_mspm0_data_##index = {                          \
+		ADC_CONTEXT_INIT_TIMER(adc_mspm0_data_##index, ctx),                          \
+		ADC_CONTEXT_INIT_LOCK(adc_mspm0_data_##index, ctx),                           \
+		ADC_CONTEXT_INIT_SYNC(adc_mspm0_data_##index, ctx),                           \
 	};                                                                                         \
-	DEVICE_DT_INST_DEFINE(index, &adc_mspm0g3xxx_init, NULL, &adc_mspm0g3xxx_data_##index,     \
-			      &adc_mspm0g3xxx_cfg_##index, POST_KERNEL, CONFIG_ADC_INIT_PRIORITY,  \
-			      &mspm0g3xxx_driver_api##index);                                      \
+	DEVICE_DT_INST_DEFINE(index, &adc_mspm0_init, NULL, &adc_mspm0_data_##index,     \
+			      &adc_mspm0_cfg_##index, POST_KERNEL, CONFIG_ADC_INIT_PRIORITY,  \
+			      &mspm0_driver_api##index);                                      \
                                                                                                    \
-	static void adc_mspm0g3xxx_cfg_func_##index(void)                                          \
+	static void adc_mspm0_cfg_func_##index(void)                                          \
 	{                                                                                          \
-		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority), adc_mspm0g3xxx_isr, \
+		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority), adc_mspm0_isr, \
 			    DEVICE_DT_INST_GET(index), 0);                                         \
 		irq_enable(DT_INST_IRQN(index));                                                   \
 	}
 
-DT_INST_FOREACH_STATUS_OKAY(MSPM0G3XXX_ADC_INIT)
+DT_INST_FOREACH_STATUS_OKAY(MSPM0_ADC_INIT)

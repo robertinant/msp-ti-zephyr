@@ -16,11 +16,11 @@
 /* Driverlib includes */
 #include <ti/driverlib/dl_mcan.h>
 
-LOG_MODULE_REGISTER(can_mspm0g3xxx_canfd, CONFIG_CAN_LOG_LEVEL);
+LOG_MODULE_REGISTER(can_mspm0_canfd, CONFIG_CAN_LOG_LEVEL);
 
-#define DT_DRV_COMPAT ti_mspm0g3xxx_canfd
+#define DT_DRV_COMPAT ti_mspm0_canfd
 
-struct can_mspm0g3xxx_canfd_config {
+struct can_mspm0_canfd_config {
 	uint32_t ti_canfd_base;
 	mm_reg_t mcan_base;
 	mem_addr_t mram;
@@ -34,7 +34,7 @@ struct can_mspm0g3xxx_canfd_config {
 static int can_mspm0_canfd_read_reg(const struct device *dev, uint16_t reg, uint32_t *val)
 {
 	const struct can_mcan_config *mcan_config = dev->config;
-	const struct can_mspm0g3xxx_canfd_config *msp_canfd_config = mcan_config->custom;
+	const struct can_mspm0_canfd_config *msp_canfd_config = mcan_config->custom;
 
 	return can_mcan_sys_read_reg(msp_canfd_config->mcan_base, reg, val);
 }
@@ -42,7 +42,7 @@ static int can_mspm0_canfd_read_reg(const struct device *dev, uint16_t reg, uint
 static int can_mspm0_canfd_write_reg(const struct device *dev, uint16_t reg, uint32_t val)
 {
 	const struct can_mcan_config *mcan_config = dev->config;
-	const struct can_mspm0g3xxx_canfd_config *msp_canfd_config = mcan_config->custom;
+	const struct can_mspm0_canfd_config *msp_canfd_config = mcan_config->custom;
 
 	return can_mcan_sys_write_reg(msp_canfd_config->mcan_base, reg, val);
 }
@@ -51,7 +51,7 @@ static int can_mspm0_canfd_read_mram(const struct device *dev, uint16_t offset, 
 				     size_t len)
 {
 	const struct can_mcan_config *mcan_config = dev->config;
-	const struct can_mspm0g3xxx_canfd_config *msp_canfd_config = mcan_config->custom;
+	const struct can_mspm0_canfd_config *msp_canfd_config = mcan_config->custom;
 
 	return can_mcan_sys_read_mram(msp_canfd_config->mram, offset, dst, len);
 }
@@ -60,7 +60,7 @@ static int can_mspm0_canfd_write_mram(const struct device *dev, uint16_t offset,
 				      size_t len)
 {
 	const struct can_mcan_config *mcan_config = dev->config;
-	const struct can_mspm0g3xxx_canfd_config *msp_canfd_config = mcan_config->custom;
+	const struct can_mspm0_canfd_config *msp_canfd_config = mcan_config->custom;
 
 	return can_mcan_sys_write_mram(msp_canfd_config->mram, offset, src, len);
 }
@@ -68,15 +68,15 @@ static int can_mspm0_canfd_write_mram(const struct device *dev, uint16_t offset,
 static int can_mspm0_canfd_clear_mram(const struct device *dev, uint16_t offset, size_t len)
 {
 	const struct can_mcan_config *mcan_config = dev->config;
-	const struct can_mspm0g3xxx_canfd_config *msp_canfd_config = mcan_config->custom;
+	const struct can_mspm0_canfd_config *msp_canfd_config = mcan_config->custom;
 
 	return can_mcan_sys_clear_mram(msp_canfd_config->mram, offset, len);
 }
 
-static int can_mspm0g3xxx_canfd_get_core_clock(const struct device *dev, uint32_t *rate)
+static int can_mspm0_canfd_get_core_clock(const struct device *dev, uint32_t *rate)
 {
 	const struct can_mcan_config *mcan_config = dev->config;
-	const struct can_mspm0g3xxx_canfd_config *msp_canfd_config = mcan_config->custom;
+	const struct can_mspm0_canfd_config *msp_canfd_config = mcan_config->custom;
 
 #if (true == SOC_MSPM0_CAN_USE_HFXT)
 	*rate = SOC_MSPM0_HFCLK_FREQ_HZ / (msp_canfd_config->clock_divider);
@@ -87,10 +87,10 @@ static int can_mspm0g3xxx_canfd_get_core_clock(const struct device *dev, uint32_
 	return 0;
 }
 
-static int can_mspm0g3xxx_canfd_clock_enable(const struct device *dev)
+static int can_mspm0_canfd_clock_enable(const struct device *dev)
 {
 	const struct can_mcan_config *mcan_cfg = dev->config;
-	const struct can_mspm0g3xxx_canfd_config *msp_canfd_config = mcan_cfg->custom;
+	const struct can_mspm0_canfd_config *msp_canfd_config = mcan_cfg->custom;
 	DL_MCAN_RevisionId revid_MCAN0;
 
 #if (true == SOC_MSPM0_CAN_USE_HFXT)
@@ -140,10 +140,10 @@ static int can_mspm0g3xxx_canfd_clock_enable(const struct device *dev)
 	return 0;
 }
 
-static int can_mspm0g3xxx_canfd_init(const struct device *dev)
+static int can_mspm0_canfd_init(const struct device *dev)
 {
 	const struct can_mcan_config *mcan_cfg = dev->config;
-	const struct can_mspm0g3xxx_canfd_config *msp_canfd_config = mcan_cfg->custom;
+	const struct can_mspm0_canfd_config *msp_canfd_config = mcan_cfg->custom;
 	int ret = 0;
 
 	LOG_DBG("Initializing %s", dev->name);
@@ -160,7 +160,7 @@ static int can_mspm0g3xxx_canfd_init(const struct device *dev)
 	DL_MCAN_enablePower((MCAN_Regs *)msp_canfd_config->ti_canfd_base);
 	delay_cycles(POWER_STARTUP_DELAY);
 
-	can_mspm0g3xxx_canfd_clock_enable(dev);
+	can_mspm0_canfd_clock_enable(dev);
 
 	/* Wait for Memory initialization to be completed. */
 	while (false == DL_MCAN_isMemInitDone((MCAN_Regs *)msp_canfd_config->ti_canfd_base))
@@ -185,10 +185,10 @@ static int can_mspm0g3xxx_canfd_init(const struct device *dev)
 	return ret;
 }
 
-static void can_mspm0g3xxx_canfd_isr(const struct device *dev)
+static void can_mspm0_canfd_isr(const struct device *dev)
 {
 	const struct can_mcan_config *mcan_cfg = dev->config;
-	const struct can_mspm0g3xxx_canfd_config *msp_canfd_config = mcan_cfg->custom;
+	const struct can_mspm0_canfd_config *msp_canfd_config = mcan_cfg->custom;
 
 	switch (DL_MCAN_getPendingInterrupt((MCAN_Regs *)msp_canfd_config->ti_canfd_base)) {
 	case DL_MCAN_IIDX_LINE0:
@@ -208,7 +208,7 @@ static void can_mspm0g3xxx_canfd_isr(const struct device *dev)
 	}
 }
 
-static const struct can_driver_api can_mspm0g3xxx_canfd_driver_api = {
+static const struct can_driver_api can_mspm0_canfd_driver_api = {
 	.get_capabilities = can_mcan_get_capabilities,
 	.start = can_mcan_start,
 	.stop = can_mcan_stop,
@@ -221,7 +221,7 @@ static const struct can_driver_api can_mspm0g3xxx_canfd_driver_api = {
 #ifndef CONFIG_CAN_AUTO_BUS_OFF_RECOVERY
 	.recover = can_mcan_recover,
 #endif /* CONFIG_CAN_AUTO_BUS_OFF_RECOVERY */
-	.get_core_clock = can_mspm0g3xxx_canfd_get_core_clock,
+	.get_core_clock = can_mspm0_canfd_get_core_clock,
 	.get_max_filters = can_mcan_get_max_filters,
 	.set_state_change_callback = can_mcan_set_state_change_callback,
 	.timing_min = CAN_MCAN_TIMING_MIN_INITIALIZER,
@@ -241,25 +241,25 @@ static const struct can_mcan_ops can_mspm0_canfd_ops = {
 	.clear_mram = can_mspm0_canfd_clear_mram,
 };
 
-#define can_mspm0g3xxx_canfd_IRQ_CFG_FUNCTION(index)                                               \
+#define can_mspm0_canfd_IRQ_CFG_FUNCTION(index)                                               \
 	static void config_can_##index(void)                                                       \
 	{                                                                                          \
 		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority),                     \
-			    can_mspm0g3xxx_canfd_isr, DEVICE_DT_INST_GET(index), 0);               \
+			    can_mspm0_canfd_isr, DEVICE_DT_INST_GET(index), 0);               \
 		irq_enable(DT_INST_IRQN(index));                                                   \
 	}
 
-#define can_mspm0g3xxx_canfd_CFG_INST(index)                                                       \
+#define can_mspm0_canfd_CFG_INST(index)                                                       \
 	BUILD_ASSERT(CAN_MCAN_DT_INST_MRAM_ELEMENTS_SIZE(index) <=                                 \
 			     CAN_MCAN_DT_INST_MRAM_SIZE(index),                                    \
 		     "Insufficient Message RAM size");                                             \
                                                                                                    \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
-	CAN_MCAN_CALLBACKS_DEFINE(can_mspm0g3xxx_canfd_cbs_##index,                                \
+	CAN_MCAN_CALLBACKS_DEFINE(can_mspm0_canfd_cbs_##index,                                \
 				  CAN_MCAN_DT_INST_MRAM_TX_BUFFER_ELEMENTS(index),                 \
 				  CONFIG_CAN_MAX_STD_ID_FILTER, CONFIG_CAN_MAX_EXT_ID_FILTER);     \
                                                                                                    \
-	static const struct can_mspm0g3xxx_canfd_config can_mspm0g3xxx_canfd_cfg_##index = {       \
+	static const struct can_mspm0_canfd_config can_mspm0_canfd_cfg_##index = {       \
 		.ti_canfd_base = DT_REG_ADDR_BY_NAME(DT_DRV_INST(index), ti_canfd),                \
 		.mcan_base = CAN_MCAN_DT_INST_MCAN_ADDR(index),                                    \
 		.mram = CAN_MCAN_DT_INST_MRAM_ADDR(index),                                         \
@@ -268,19 +268,19 @@ static const struct can_mcan_ops can_mspm0_canfd_ops = {
 		.clock_divider = DT_INST_PROP_OR(inst, clk_divider, 1)};                           \
                                                                                                    \
 	static const struct can_mcan_config can_mcan_cfg_##index = CAN_MCAN_DT_CONFIG_INST_GET(    \
-		index, &can_mspm0g3xxx_canfd_cfg_##index, &can_mspm0_canfd_ops,                    \
-		&can_mspm0g3xxx_canfd_cbs_##index);
+		index, &can_mspm0_canfd_cfg_##index, &can_mspm0_canfd_ops,                    \
+		&can_mspm0_canfd_cbs_##index);
 
-#define can_mspm0g3xxx_canfd_DATA_INST(index)                                                      \
+#define can_mspm0_canfd_DATA_INST(index)                                                      \
 	static struct can_mcan_data can_mcan_data_##index = CAN_MCAN_DATA_INITIALIZER(NULL);
 
-#define can_mspm0g3xxx_canfd_DEVICE_INST(index)                                                    \
-	CAN_DEVICE_DT_INST_DEFINE(index, can_mspm0g3xxx_canfd_init, NULL, &can_mcan_data_##index,  \
+#define can_mspm0_canfd_DEVICE_INST(index)                                                    \
+	CAN_DEVICE_DT_INST_DEFINE(index, can_mspm0_canfd_init, NULL, &can_mcan_data_##index,  \
 				  &can_mcan_cfg_##index, POST_KERNEL, CONFIG_CAN_INIT_PRIORITY,    \
-				  &can_mspm0g3xxx_canfd_driver_api);
+				  &can_mspm0_canfd_driver_api);
 
-#define can_mspm0g3xxx_canfd_INST(index)                                                           \
-	can_mspm0g3xxx_canfd_IRQ_CFG_FUNCTION(index) can_mspm0g3xxx_canfd_CFG_INST(index)          \
-		can_mspm0g3xxx_canfd_DATA_INST(index) can_mspm0g3xxx_canfd_DEVICE_INST(index)
+#define can_mspm0_canfd_INST(index)                                                           \
+	can_mspm0_canfd_IRQ_CFG_FUNCTION(index) can_mspm0_canfd_CFG_INST(index)          \
+		can_mspm0_canfd_DATA_INST(index) can_mspm0_canfd_DEVICE_INST(index)
 
-DT_INST_FOREACH_STATUS_OKAY(can_mspm0g3xxx_canfd_INST)
+DT_INST_FOREACH_STATUS_OKAY(can_mspm0_canfd_INST)
