@@ -1,8 +1,0 @@
-# TI LP_MSPM0L2228 configuration
-
-# Copyright (c) 2024 Texas Instruments
-# SPDX-License-Identifier: Apache-2.0
-
-if BOARD_LP_MSPM0L2228
-
-endif # BOARD_LP_MSPM0L2228
