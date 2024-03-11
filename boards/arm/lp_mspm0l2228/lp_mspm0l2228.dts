@@ -94,3 +94,7 @@
 	pinctrl-names = "default";
 	status = "disabled";
 };
+
+&wdt0 {
+	status = "disabled"
+}; 
