@@ -115,3 +115,11 @@
 	bus-speed-data = <1000000>;
 	status = "disabled";
 };
+
+&wdt0 {
+	status = "okay";
+}; 
+
+&wdt1 {
+	status = "disabled";
+}; 

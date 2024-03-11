@@ -39,7 +39,6 @@ enum i2c_mspm0_state {
 	I2C_mspm0_TARGET_TX_INPROGRESS,
 	I2C_mspm0_TARGET_RX_INPROGRESS,
 	I2C_mspm0_TARGET_PREEMPTED,
-
 	I2C_mspm0_ERROR
 };
 
