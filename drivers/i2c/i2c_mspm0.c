@@ -28,18 +28,18 @@ LOG_MODULE_REGISTER(i2c_mspm0);
 	 DL_I2C_INTERRUPT_TARGET_STOP)
 
 enum i2c_mspm0_state {
-	I2C_mspm0_IDLE,
-	I2C_mspm0_TX_STARTED,
-	I2C_mspm0_TX_INPROGRESS,
-	I2C_mspm0_TX_COMPLETE,
-	I2C_mspm0_RX_STARTED,
-	I2C_mspm0_RX_INPROGRESS,
-	I2C_mspm0_RX_COMPLETE,
-	I2C_mspm0_TARGET_STARTED,
-	I2C_mspm0_TARGET_TX_INPROGRESS,
-	I2C_mspm0_TARGET_RX_INPROGRESS,
-	I2C_mspm0_TARGET_PREEMPTED,
-	I2C_mspm0_ERROR
+	I2C_MSPM0_IDLE,
+	I2C_MSPM0_TX_STARTED,
+	I2C_MSPM0_TX_INPROGRESS,
+	I2C_MSPM0_TX_COMPLETE,
+	I2C_MSPM0_RX_STARTED,
+	I2C_MSPM0_RX_INPROGRESS,
+	I2C_MSPM0_RX_COMPLETE,
+	I2C_MSPM0_TARGET_STARTED,
+	I2C_MSPM0_TARGET_TX_INPROGRESS,
+	I2C_MSPM0_TARGET_RX_INPROGRESS,
+	I2C_MSPM0_TARGET_PREEMPTED,
+	I2C_MSPM0_ERROR
 };
 
 struct i2c_mspm0_config {
@@ -120,12 +120,12 @@ static int i2c_mspm0_receive(const struct device *dev, struct i2c_msg msg, uint1
 
 	/* Send a read request to Target */
 	data->count = 0;
-	data->state = I2C_mspm0_RX_STARTED;
+	data->state = I2C_MSPM0_RX_STARTED;
 	DL_I2C_startControllerTransfer((I2C_Regs *)config->base, data->addr,
 				       DL_I2C_CONTROLLER_DIRECTION_RX, data->msg.len);
 
 	/* Wait for all bytes to be received in interrupt */
-	while (data->state != I2C_mspm0_RX_COMPLETE && (data->state != I2C_mspm0_ERROR))
+	while (data->state != I2C_MSPM0_RX_COMPLETE && (data->state != I2C_MSPM0_ERROR))
 		;
 
 	/* If error, return error */
@@ -151,7 +151,7 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 	data->addr = addr;
 
 	/* Update the state */
-	data->state = I2C_mspm0_IDLE;
+	data->state = I2C_MSPM0_IDLE;
 
 	/*
 	 * Fill the FIFO
@@ -174,7 +174,7 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 	 * Send the packet to the controller.
 	 * This function will send Start + Stop automatically
 	 */
-	data->state = I2C_mspm0_TX_STARTED;
+	data->state = I2C_MSPM0_TX_STARTED;
 	while (!(DL_I2C_getControllerStatus((I2C_Regs *)config->base) &
 		 DL_I2C_CONTROLLER_STATUS_IDLE))
 		;
@@ -182,7 +182,7 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 				       DL_I2C_CONTROLLER_DIRECTION_TX, data->msg.len);
 
 	/* Wait until the Controller sends all bytes */
-	while ((data->state != I2C_mspm0_TX_COMPLETE) && (data->state != I2C_mspm0_ERROR))
+	while ((data->state != I2C_MSPM0_TX_COMPLETE) && (data->state != I2C_MSPM0_ERROR))
 		;
 
 	/* If error, return error */
@@ -256,7 +256,7 @@ static int i2c_mspm0_target_register(const struct device *dev,
 			data->target_config = target_config;
 			data->target_callbacks = target_config->callbacks;
 
-			if (data->state == I2C_mspm0_TARGET_PREEMPTED) {
+			if (data->state == I2C_MSPM0_TARGET_PREEMPTED) {
 				DL_I2C_clearInterruptStatus((I2C_Regs *)config->base,
 							    TI_MSPM0G_TARGET_INTERRUPTS);
 			}
@@ -275,7 +275,7 @@ static int i2c_mspm0_target_register(const struct device *dev,
 	data->target_config = target_config;
 	data->dev_config &= ~I2C_MODE_CONTROLLER;
 	data->is_target = true;
-	data->state = I2C_mspm0_IDLE;
+	data->state = I2C_MSPM0_IDLE;
 
 	DL_I2C_setTargetOwnAddress((I2C_Regs *)config->base, target_config->address);
 	DL_I2C_setTargetTXFIFOThreshold((I2C_Regs *)config->base, DL_I2C_TX_FIFO_LEVEL_BYTES_1);
@@ -349,17 +349,17 @@ static void i2c_mspm0_isr(const struct device *dev)
 	switch (DL_I2C_getPendingInterrupt((I2C_Regs *)config->base)) {
 	/* controller interrupts */
 	case DL_I2C_IIDX_CONTROLLER_RX_DONE:
-		data->state = I2C_mspm0_RX_COMPLETE;
+		data->state = I2C_MSPM0_RX_COMPLETE;
 		break;
 	case DL_I2C_IIDX_CONTROLLER_TX_DONE:
 		DL_I2C_disableInterrupt((I2C_Regs *)config->base,
 					DL_I2C_INTERRUPT_CONTROLLER_TXFIFO_TRIGGER);
-		data->state = I2C_mspm0_TX_COMPLETE;
+		data->state = I2C_MSPM0_TX_COMPLETE;
 		break;
 	case DL_I2C_IIDX_CONTROLLER_RXFIFO_TRIGGER:
-		if (data->state != I2C_mspm0_RX_COMPLETE) {
+		if (data->state != I2C_MSPM0_RX_COMPLETE) {
 			/* Fix for RX_DONE happening before the last RXFIFO_TRIGGER */
-			data->state = I2C_mspm0_RX_INPROGRESS;
+			data->state = I2C_MSPM0_RX_INPROGRESS;
 		}
 		/* Receive all bytes from target */
 		while (DL_I2C_isControllerRXFIFOEmpty((I2C_Regs *)config->base) != true) {
@@ -373,7 +373,7 @@ static void i2c_mspm0_isr(const struct device *dev)
 		}
 		break;
 	case DL_I2C_IIDX_CONTROLLER_TXFIFO_TRIGGER:
-		data->state = I2C_mspm0_TX_INPROGRESS;
+		data->state = I2C_MSPM0_TX_INPROGRESS;
 		/* Fill TX FIFO with next bytes to send */
 		if (data->count < data->msg.len) {
 			data->count += DL_I2C_fillControllerTXFIFO((I2C_Regs *)config->base,
@@ -383,10 +383,10 @@ static void i2c_mspm0_isr(const struct device *dev)
 		break;
 	case DL_I2C_IIDX_CONTROLLER_ARBITRATION_LOST:
 	case DL_I2C_IIDX_CONTROLLER_NACK:
-		if ((data->state == I2C_mspm0_RX_STARTED) ||
-		    (data->state == I2C_mspm0_TX_STARTED)) {
+		if ((data->state == I2C_MSPM0_RX_STARTED) ||
+		    (data->state == I2C_MSPM0_TX_STARTED)) {
 			/* NACK interrupt if I2C Target is disconnected */
-			data->state = I2C_mspm0_ERROR;
+			data->state = I2C_MSPM0_ERROR;
 		}
 
 	/* Not implemented */
@@ -399,7 +399,7 @@ static void i2c_mspm0_isr(const struct device *dev)
 		break;
 	/* target interrupts */
 	case DL_I2C_IIDX_TARGET_START:
-		if (k_sem_take(&data->i2c_busy_sem, K_NO_WAIT) != 0) {
+		if (k_sem_take(&data->i2c_busy_sem, K_NO_WAIT) != 0 && data->state == I2C_MSPM0_TARGET_IDLE) {
 			/* we do not have control of the peripheral. Some
 			 * configuration or other function is making modifications
 			 * to the peripheral so we must cancel the transaction. The
@@ -407,18 +407,18 @@ static void i2c_mspm0_isr(const struct device *dev)
 			 * the target peripheral entirely.
 			 */
 			DL_I2C_disableTarget((I2C_Regs *)config->base);
-			data->state = I2C_mspm0_TARGET_PREEMPTED;
+			data->state = I2C_MSPM0_TARGET_PREEMPTED;
 		} else {
 			/* semaphore has successfully been obtained */
-			data->state = I2C_mspm0_TARGET_STARTED;
+			data->state = I2C_MSPM0_TARGET_STARTED;
 
 			/* Flush TX FIFO to clear out any stale data */
 			DL_I2C_flushTargetTXFIFO((I2C_Regs *)config->base);
 		}
 		break;
 	case DL_I2C_IIDX_TARGET_RX_DONE:
-		if (data->state == I2C_mspm0_TARGET_STARTED) {
-			data->state = I2C_mspm0_TARGET_RX_INPROGRESS;
+		if (data->state == I2C_MSPM0_TARGET_STARTED) {
+			data->state = I2C_MSPM0_TARGET_RX_INPROGRESS;
 			if (data->target_callbacks->write_requested != NULL) {
 				data->target_rx_valid = data->target_callbacks->write_requested(
 					data->target_config);
@@ -452,7 +452,7 @@ static void i2c_mspm0_isr(const struct device *dev)
 
 		break;
 	case DL_I2C_IIDX_TARGET_TXFIFO_TRIGGER:
-		data->state = I2C_mspm0_TARGET_TX_INPROGRESS;
+		data->state = I2C_MSPM0_TARGET_TX_INPROGRESS;
 		/* Fill TX FIFO if there are more bytes to send */
 		if (data->target_callbacks->read_requested != NULL) {
 			uint8_t nextByte;
@@ -494,7 +494,7 @@ static void i2c_mspm0_isr(const struct device *dev)
 		}
 		break;
 	case DL_I2C_IIDX_TARGET_STOP:
-		data->state = I2C_mspm0_IDLE;
+		data->state = I2C_MSPM0_IDLE;
 		k_sem_give(&data->i2c_busy_sem);
 		if (data->target_callbacks->stop) {
 			data->target_callbacks->stop(data->target_config);
@@ -523,6 +523,8 @@ static int i2c_mspm0_init(const struct device *dev)
 	DL_I2C_reset((I2C_Regs *)config->base);
 	DL_I2C_enablePower((I2C_Regs *)config->base);
 	delay_cycles(POWER_STARTUP_DELAY);
+
+	DL_I2C_disableTargetWakeup((I2C_Regs *)config->base);
 
 	/* Init GPIO */
 	ret = pinctrl_apply_state(config->pinctrl, PINCTRL_STATE_DEFAULT);
