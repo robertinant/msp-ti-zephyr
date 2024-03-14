@@ -399,8 +399,8 @@ static void i2c_mspm0_isr(const struct device *dev)
 		break;
 	/* target interrupts */
 	case DL_I2C_IIDX_TARGET_START:
-		if (k_sem_take(&data->i2c_busy_sem, K_NO_WAIT) != 0 && data->state == I2C_MSPM0_TARGET_IDLE) {
-			/* we do not have control of the peripheral. Some
+		if (k_sem_take(&data->i2c_busy_sem, K_NO_WAIT) != 0 && data->state == I2C_MSPM0_IDLE) {
+			/* we do not have control of the peripheral. And it is not a restart. Some
 			 * configuration or other function is making modifications
 			 * to the peripheral so we must cancel the transaction. The
 			 * only supported way to cancel the transaction is disabling
