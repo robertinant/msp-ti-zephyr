@@ -122,6 +122,18 @@
 			ti,watchdog-reset-action = <1>;
 		};
 	};
+
+	smbus0: smbus0 {
+		compatible = "ti,mspm0-smbus";
+		i2c = <&i2c0>;
+		status = "disabled";
+	};
+
+	smbus1: smbus1 {
+		compatible = "ti,mspm0-smbus";
+		i2c = <&i2c1>;
+		status = "disabled";
+	};
 };
 
 &nvic {
