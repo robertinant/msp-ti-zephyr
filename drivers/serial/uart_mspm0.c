@@ -185,7 +185,7 @@ static int uart_mspm0_irq_update(const struct device *dev)
 }
 
 static void uart_mspm0_irq_callback_set(const struct device *dev,
-					     uart_irq_callback_user_data_t cb, void *cb_data)
+						uart_irq_callback_user_data_t cb, void *cb_data)
 {
 	struct uart_mspm0_data *const dev_data = dev->data;
 
