@@ -7,3 +7,7 @@ family:
     - name: mspm0g310x
     - name: mspm0g150x
     - name: mspm0g110x
+  - name: mspm0l122x_l222x
+    socs:
+    - name: mspm0l222x
+    - name: mspm0l122x

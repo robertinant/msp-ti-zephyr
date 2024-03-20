@@ -25,10 +25,6 @@ extern "C" {
 
 /* clang-format on */
 
-void SYSCFG_DL_init(void);
-void SYSCFG_DL_initPower(void);
-void SYSCFG_DL_SYSCTL_init(void);
-
 #ifdef __cplusplus
 }
 #endif

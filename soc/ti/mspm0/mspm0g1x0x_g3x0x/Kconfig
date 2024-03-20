@@ -13,4 +13,4 @@ config SOC_SERIES_MSPM0G1X0X_G3X0X
 	select BUILD_OUTPUT_HEX
 	select HAS_MSPM0_SDK
 	help
-	  Enable support for TI MSPM0GXXXX.
+	  Enable support for TI MSPM0G1X0X_G3X0X

@@ -1,8 +1,5 @@
-# TI LP_MSPM0L2228 Development Board
-
 # Copyright (c) 2024 Texas Instruments
 # SPDX-License-Identifier: Apache-2.0
 
 config BOARD_LP_MSPM0L2228
-	bool "TI LP_MSPM0L2228"
-	depends on SOC_MSPM0L2228
+	select SOC_MSPM0L2228
