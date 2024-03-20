@@ -96,5 +96,5 @@
 };
 
 &wdt0 {
-	status = "disabled"
+	status = "disabled";
 }; 
