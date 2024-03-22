@@ -14,11 +14,13 @@
 #include <soc.h>
 
 struct smbus_mspm0_config {
-    uint32_t base;
+    I2C_Regs * base;
 };
 
 struct smbus_mspm0_data {
     uint32_t value;
+    uint32_t isTarget;
+    uint32_t dev_config;
 };
 
 static void smbus_mspm0_init(const struct device *dev) {
@@ -26,15 +28,22 @@ static void smbus_mspm0_init(const struct device *dev) {
 }
 
 static int smbus_mspm0_configure(const struct device *dev, uint32_t dev_config){
+    const struct smbus_mspm0_config *config = dev->config;
+	struct smbus_mspm0_data *data = dev->data;
 
+    data->dev_config = dev_config;
+	/* Set the I2C speed to standard for now*/
+	DL_I2C_setTimerPeriod(config->base, (uint32_t) 7);
 }
 
 static int smbus_mspm0_get_config(const struct device *dev, uint32_t * dev_config){
+    struct smbus_mspm0_data *data = dev->data;
 
+    return data->dev_config;
 }
 
 static int smbus_mspm0_quick(const struct device *dev, uint16_t addr, enum smbus_direction direction){
-    
+
 }
 
 static const struct smbus_driver_api smbus_mspm0_driver_api = {
