@@ -142,7 +142,7 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 	struct i2c_mspm0_data *data = dev->data;
 
 	/* Sending address without data is not supported */
-	if (msg.len == 0) {
+	if (msg.len == 0 && !data->smbus_mode) {
 		return -EIO;
 	}
 
