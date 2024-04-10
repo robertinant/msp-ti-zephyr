@@ -23,7 +23,7 @@ LOG_MODULE_REGISTER(i2c_mspm0);
 #include <ti/driverlib/dl_gpio.h>
 
 #define TI_MSPM0G_TARGET_INTERRUPTS                                                                \
-	(DL_I2C_INTERRUPT_TARGET_RX_DONE | DL_I2C_INTERRUPT_TARGET_TXFIFO_TRIGGER |         \
+	(DL_I2C_INTERRUPT_TARGET_RX_DONE  |         \
 	 DL_I2C_INTERRUPT_TARGET_TXFIFO_EMPTY | DL_I2C_INTERRUPT_TARGET_START |                    \
 	 DL_I2C_INTERRUPT_TARGET_STOP)
 
@@ -142,9 +142,9 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 	struct i2c_mspm0_data *data = dev->data;
 
 	/* Sending address without data is not supported */
-	if (msg.len == 0 && !data->smbus_mode) {
-		return -EIO;
-	}
+	// if (msg.len == 0 && !data->smbus_mode) {
+	// 	return -EIO;
+	// }
 
 	/* Update cached msg and addr */
 	data->msg = msg;
@@ -292,8 +292,7 @@ static int i2c_mspm0_target_register(const struct device *dev,
 			DL_I2C_INTERRUPT_CONTROLLER_RX_DONE | DL_I2C_INTERRUPT_CONTROLLER_TX_DONE);
 
 	DL_I2C_clearInterruptStatus(
-		(I2C_Regs *)config->base,
-		(DL_I2C_INTERRUPT_TARGET_TXFIFO_TRIGGER | DL_I2C_INTERRUPT_TARGET_TXFIFO_EMPTY));
+		(I2C_Regs *)config->base, DL_I2C_INTERRUPT_TARGET_TXFIFO_EMPTY);
 
 	DL_I2C_enableInterrupt((I2C_Regs *)config->base, TI_MSPM0G_TARGET_INTERRUPTS);
 
@@ -322,7 +321,7 @@ static int i2c_mspm0_target_unregister(const struct device *dev,
 	/* reconfigure the interrupt to use a slave isr? */
 	DL_I2C_disableInterrupt(
 		(I2C_Regs *)config->base,
-		DL_I2C_INTERRUPT_TARGET_RXFIFO_TRIGGER | DL_I2C_INTERRUPT_TARGET_TXFIFO_TRIGGER |
+		DL_I2C_INTERRUPT_TARGET_RXFIFO_TRIGGER |
 			DL_I2C_INTERRUPT_TARGET_TXFIFO_EMPTY | DL_I2C_INTERRUPT_TARGET_START |
 			DL_I2C_INTERRUPT_TARGET_STOP);
 
@@ -451,45 +450,58 @@ static void i2c_mspm0_isr(const struct device *dev)
 		}
 
 		break;
-	case DL_I2C_IIDX_TARGET_TXFIFO_TRIGGER:
-		data->state = I2C_MSPM0_TARGET_TX_INPROGRESS;
-		/* Fill TX FIFO if there are more bytes to send */
-		if (data->target_callbacks->read_requested != NULL) {
-			uint8_t nextByte;
-
-			data->target_tx_valid = data->target_callbacks->read_requested(
-				data->target_config, &nextByte);
-			if (data->target_tx_valid == 0) {
-				DL_I2C_transmitTargetData((I2C_Regs *)config->base, nextByte);
-			} else {
-				/* In this case, no new data is desired to be filled, thus
-				 * 0's are transmitted
-				 */
-				DL_I2C_transmitTargetData((I2C_Regs *)config->base, 0x00);
-			}
-		}
-		break;
 	case DL_I2C_IIDX_TARGET_TXFIFO_EMPTY:
-		if (data->target_callbacks->read_processed != NULL) {
-			/* still using the FIFO, we call read_processed in order to add
-			 * additional data rather than from a buffer. If the write-received
-			 * function chooses to return 0 (no more data present), then 0's will
-			 * be filled in
-			 */
-			uint8_t nextByte;
+		if(data->state == I2C_MSPM0_TARGET_STARTED) {
+			/* First byte detected from a read operation. */
+			data->state = I2C_MSPM0_TARGET_TX_INPROGRESS;
+			if(data->target_callbacks->read_requested != NULL){
+				uint8_t nextByte;
 
-			if (data->target_tx_valid == 0) {
-				data->target_tx_valid = data->target_callbacks->read_processed(
+				data->target_tx_valid = data->target_callbacks->read_requested(
 					data->target_config, &nextByte);
-			}
-
-			if (data->target_tx_valid == 0) {
-				DL_I2C_transmitTargetData((I2C_Regs *)config->base, nextByte);
+				if (data->target_tx_valid == 0) {
+					DL_I2C_transmitTargetData((I2C_Regs *)config->base, nextByte);
+				} else {
+					/* In this case, no new data is desired to be filled, thus
+					* 0's are transmitted
+					*/
+					DL_I2C_transmitTargetData((I2C_Regs *)config->base, 0x00);
+				}
 			} else {
-				/* In this case, no new data is desired to be filled, thus
-				 * 0's are transmitted
-				 */
-				DL_I2C_transmitTargetData((I2C_Regs *)config->base, 0x00);
+				/* read_requested function is not found. The target data will
+				 * continue to transmit to fulfill the error and not hang
+				 * the controller by stretching indefinitely */
+				DL_I2C_transmitTargetDataCheck((I2C_Regs *)config->base, 0xFF);
+				data->target_tx_valid = -1;
+			}
+		} else {
+			/* still using the FIFO, we call read_processed in order to add
+			* additional data rather than from a buffer. If the write-received
+			* function chooses to return 0 (no more data present), then 0's will
+			* be filled in
+			*/
+			if (data->target_callbacks->read_processed != NULL) {
+				uint8_t nextByte;
+
+				if (data->target_tx_valid == 0) {
+					data->target_tx_valid = data->target_callbacks->read_processed(
+						data->target_config, &nextByte);
+				}
+
+				if (data->target_tx_valid == 0) {
+					DL_I2C_transmitTargetData((I2C_Regs *)config->base, nextByte);
+				} else {
+					/* In this case, no new data is desired to be filled, thus
+					* 0's are transmitted
+					*/
+					DL_I2C_transmitTargetData((I2C_Regs *)config->base, 0x00);
+				}
+			} else {
+				/* read_processed function is not found. The target data will
+				 * continue to transmit to fulfill the error and not hang
+				 * the controller by stretching indefinitely */
+				DL_I2C_transmitTargetDataCheck((I2C_Regs *)config->base, 0xFF);
+				data->target_tx_valid = -1;
 			}
 		}
 		break;
