@@ -164,7 +164,7 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 	/* Enable TXFIFO trigger interrupt if there are more bytes to send */
 	if (data->count < data->msg.len) {
 		DL_I2C_enableInterrupt((I2C_Regs *)config->base,
-				       DL_I2C_INTERRUPT_CONTROLLER_TXFIFO_TRIGGER);
+					DL_I2C_INTERRUPT_CONTROLLER_TXFIFO_TRIGGER);
 	} else {
 		DL_I2C_disableInterrupt((I2C_Regs *)config->base,
 					DL_I2C_INTERRUPT_CONTROLLER_TXFIFO_TRIGGER);
@@ -178,8 +178,9 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 	while (!(DL_I2C_getControllerStatus((I2C_Regs *)config->base) &
 		 DL_I2C_CONTROLLER_STATUS_IDLE))
 		;
+
 	DL_I2C_startControllerTransfer((I2C_Regs *)config->base, data->addr,
-				       DL_I2C_CONTROLLER_DIRECTION_TX, data->msg.len);
+					DL_I2C_CONTROLLER_DIRECTION_TX, data->msg.len);
 
 	/* Wait until the Controller sends all bytes */
 	while ((data->state != I2C_MSPM0_TX_COMPLETE) && (data->state != I2C_MSPM0_ERROR))
