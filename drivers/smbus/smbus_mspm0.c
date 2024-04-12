@@ -43,7 +43,26 @@ static int smbus_mspm0_get_config(const struct device *dev, uint32_t * dev_confi
 }
 
 static int smbus_mspm0_quick(const struct device *dev, uint16_t addr, enum smbus_direction direction){
-	// quick command
+	// here's the quick command
+
+}
+
+static int smbus_mspm0_byte_write(const struct device *dev, uint16_t addr, uint8_t byte){
+
+}
+
+static int smbus_mspm0_byte_read(const struct device *dev, uint16_t addr, uint8_t byte){
+
+}
+
+static int smbus_mspm0_byte_data_write(const struct device *dev, uint16_t addr,
+									uint8_t cmd, uint8_t byte){
+	// data write
+}
+
+static int smbus_mspm0_byte_data_read(const struct device *dev, uint16_t addr,
+									uint8_t cmd, uint8_t byte){
+	// data read
 }
 
 static const struct smbus_driver_api smbus_mspm0_driver_api = {
@@ -55,10 +74,10 @@ static const struct smbus_driver_api smbus_mspm0_driver_api = {
     .host_notify_set = //
     .host_notify_remove_cb = //
     .quick = smbus_mspm0_quick,
-    .byte_write = //
-    .byte_read = //
-    .byte_data_write = //
-    .byte_data_read = //
+    .byte_write = smbus_mspm0_byte_write,
+    .byte_read = smbus_mspm0_byte_read,
+    .byte_data_write = smbus_mspm0_byte_data_write,
+    .byte_data_read = smbus_mspm0_byte_data_read,
     .word_data_write = //
     .word_data_read = //
     .pcall = //
@@ -69,25 +88,26 @@ static const struct smbus_driver_api smbus_mspm0_driver_api = {
 };
 
 
-#define MSP_SMBUS_INIT_FN(index)                                                                     \
-                                                                                                   \
-	PINCTRL_DT_INST_DEFINE(index);                                                             \
-                                                                                                   \                                              \
-                                                                                                   \
-	static const struct i2c_mspm0_config i2c_mspm0_cfg_##index = {                   \
-		.base = DT_INST_REG_ADDR(index),                                                   \
-		.clock_frequency = DT_INST_PROP(index, clock_frequency),                           \
-		.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                  \
-		.interrupt_init_function = i2c_mspm0_interrupt_init_##index,                  \
-		.gI2CClockConfig = {.clockSel = DL_I2C_CLOCK_BUSCLK,                               \
-				    .divideRatio = DL_I2C_CLOCK_DIVIDE_1}};                        \
-                                                                                                   \
-	static struct i2c_mspm0_data i2c_mspm0_data_##index;                             \
-                                                                                                   \
-	I2C_DEVICE_DT_INST_DEFINE(index, i2c_mspm0_init, NULL, &i2c_mspm0_data_##index,  \
-				  &i2c_mspm0_cfg_##index, POST_KERNEL,                        \
-				  CONFIG_I2C_INIT_PRIORITY, &i2c_mspm0_driver_api);           \
-                                                                                                   \
+#define MSP_SMBUS_INIT_FN(index)		\
+	\
+	PINCTRL_DT_INST_DEFINE(index);		\
+	\
+	\
+	static const struct i2c_mspm0_config i2c_mspm0_cfg_##index = {	\
+		.base = DT_INST_REG_ADDR(index),							\
+		.clock_frequency = DT_INST_PROP(index, clock_frequency),	\
+		.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),			\
+		.interrupt_init_function = i2c_mspm0_interrupt_init_##index,\
+		.gI2CClockConfig = {.clockSel = DL_I2C_CLOCK_BUSCLK,		\
+				    .divideRatio = DL_I2C_CLOCK_DIVIDE_1}};			\
+	\
+	static struct i2c_mspm0_data i2c_mspm0_data_##index;			\
+	\
+	I2C_DEVICE_DT_INST_DEFINE(index, i2c_mspm0_init, NULL,			\
+				&i2c_mspm0_data_##index, &i2c_mspm0_cfg_##index,	\
+				POST_KERNEL, CONFIG_I2C_INIT_PRIORITY,	\
+				&i2c_mspm0_driver_api);					\
+	\
 	INTERRUPT_INIT_FUNCTION(index)
 
 DT_INST_FOREACH_STATUS_OKAY(MSP_SMBUS_INIT_FN)
