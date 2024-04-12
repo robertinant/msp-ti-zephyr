@@ -43,7 +43,7 @@ static int smbus_mspm0_get_config(const struct device *dev, uint32_t * dev_confi
 }
 
 static int smbus_mspm0_quick(const struct device *dev, uint16_t addr, enum smbus_direction direction){
-
+	// quick command
 }
 
 static const struct smbus_driver_api smbus_mspm0_driver_api = {
