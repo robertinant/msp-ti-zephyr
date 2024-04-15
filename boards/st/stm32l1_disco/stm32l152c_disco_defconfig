@@ -3,6 +3,9 @@
 # enable uart driver
 CONFIG_SERIAL=y
 
+#enable spi driver
+CONFIG_SPI=y
+
 # enable console
 CONFIG_CONSOLE=y
 CONFIG_UART_CONSOLE=y
