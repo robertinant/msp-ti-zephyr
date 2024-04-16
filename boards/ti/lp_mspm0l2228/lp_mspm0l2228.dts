@@ -2,14 +2,13 @@
 
 /dts-v1/;
 
-#include <ti/mspm0l2228.dtsi>
-#include <ti/mspm0/mspm0l2228-pinctrl.dtsi>
+#include <ti/mspm0l122x_l222x/mspm0l2228.dtsi>
+#include <ti/mspm0l122x_l222x/mspm0l222x-pinctrl.dtsi>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 
 / {
 	model = "TI LP_MSPM0L2228";
-	compatible = "ti,lp_mspm0l2228","ti,mspm0l2228",
-				  "ti,mspm0l2xxx";
+	compatible = "ti,mspm0l2228";
 
 	aliases {
 		led0 = &led0;
