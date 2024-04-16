@@ -31,7 +31,7 @@ static uint32_t gpioa_pincm_lut[NUM_GPIOA_PIN] = {
 	IOMUX_PINCM55, IOMUX_PINCM59, IOMUX_PINCM60, IOMUX_PINCM3,  IOMUX_PINCM4,
 	IOMUX_PINCM5,  IOMUX_PINCM6,
 };
-#elif defined(CONFIG_SOC_SERIES_MSPM0L2XXX)
+#elif defined(CONFIG_SOC_SERIES_MSPM0L122X_L222X)
 #define NUM_GPIOA_PIN 31
 #define gpioa_pins    NUM_GPIOA_PIN
 static uint32_t gpioa_pincm_lut[NUM_GPIOA_PIN] = {
@@ -62,7 +62,7 @@ static uint32_t gpiob_pincm_lut[NUM_GPIOB_PIN] = {
 	IOMUX_PINCM48, IOMUX_PINCM49, IOMUX_PINCM50, IOMUX_PINCM51,	IOMUX_PINCM52,
 	IOMUX_PINCM56, IOMUX_PINCM57, IOMUX_PINCM58,
 };
-#elif defined(CONFIG_SOC_SERIES_MSPM0L2XXX)
+#elif defined(CONFIG_SOC_SERIES_MSPM0L122X_L222X)
 #define NUM_GPIOB_PIN 32
 #define gpiob_pins    NUM_GPIOB_PIN
 static uint32_t gpiob_pincm_lut[NUM_GPIOB_PIN] = {
@@ -81,7 +81,7 @@ static uint32_t gpiob_pincm_lut[NUM_GPIOB_PIN] = {
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(gpioc), okay)
 #define GPIOC_NODE    DT_NODELABEL(gpioc)
-#ifdef CONFIG_SOC_SERIES_MSPM0L2XXX
+#ifdef CONFIG_SOC_SERIES_MSPM0L122X_L222X
 #define NUM_GPIOC_PIN 10
 #define gpioc_pins    NUM_GPIOC_PIN
 static uint32_t gpioc_pincm_lut[NUM_GPIOC_PIN] = {
