@@ -256,6 +256,14 @@ static const struct uart_driver_api uart_mspm0_driver_api = {
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */
 };
 
+/*
+ 	IF_ENABLED(CONFIG_UART_INTERRUPT_DRIVEN, \
+	(.irq_config_func = uart_mspm0_##index##_irq_register,))
+*/
+/*
+
+ */
+
 #define MSPM0_UART_INIT_FN(index)		\
 									\
 	PINCTRL_DT_INST_DEFINE(index);	\
