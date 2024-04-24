@@ -85,6 +85,12 @@
 		};
 
 	};
+
+    lin0: lin0 {
+		compatible = "ti,mspm0-lin";
+		uart = <&uart1>;
+		status = "disabled";
+	};
 };
 
 &nvic {
