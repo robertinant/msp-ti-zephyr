@@ -21,4 +21,6 @@ config LIN_INIT_PRIORITY
 
 source "drivers/lin/Kconfig.mspm0"
 
+source "drivers/lin/Kconfig.uart"
+
 endif # LIN

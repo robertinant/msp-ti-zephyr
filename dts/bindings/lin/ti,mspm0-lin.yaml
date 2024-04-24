@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: Virtual LIN UART driver
+
+compatible: "virtual,lin-uart"
+
+include: lin-controller.yaml
+
+include: [lin-controller.yaml, pinctrl-device.yaml, base.yaml]
+
+
+properties:
+    max-wait-percent:
+      type: int
+      default: 140
+      description: Duration as percent of nominal transmission time to allow space between bytes (LIN 2.2A spec is 40% additional)
+
+
+
+
+
+
+description: TI MSPM0 LIN
+
+compatible: "ti,mspm0-lin"
+
+include: [uart-controller.yaml, pinctrl-device.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
