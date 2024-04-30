@@ -85,6 +85,19 @@
 		};
 
 	};
+
+    lin0: lin0 {
+        compatible = "virtual,lin-uart";
+        status = "disabled";
+        bitrate = <19200>;
+    };
+
+    lin2: lin2 {
+        compatible = "virtual,lin-uart";
+        status = "disabled";
+        bitrate = <19200>;
+    };
+
 };
 
 &nvic {
