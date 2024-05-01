@@ -3,7 +3,11 @@
 #include <zephyr/drivers/lin.h>
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
+// #define LIN1_NODE	DT_NODELABEL(lin0)
+
 static const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(lin1));
+
+// static const struct device *dev = DEVICE_DT_GET(LIN1_NODE);
 static struct k_sem lock;
 
 static void print_msg(const struct lin_frame *msg) {

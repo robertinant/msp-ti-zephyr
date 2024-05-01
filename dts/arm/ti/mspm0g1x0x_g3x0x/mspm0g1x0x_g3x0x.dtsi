@@ -89,12 +89,14 @@
     lin0: lin0 {
         compatible = "virtual,lin-uart";
         status = "disabled";
+        uart = <&uart0>; 
         bitrate = <19200>;
     };
 
     lin2: lin2 {
         compatible = "virtual,lin-uart";
         status = "disabled";
+        uart = <&uart2>; 
         bitrate = <19200>;
     };
 

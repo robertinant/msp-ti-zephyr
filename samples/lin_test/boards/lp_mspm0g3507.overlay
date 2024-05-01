@@ -3,6 +3,7 @@
         compatible = "virtual,lin-uart";
         status = "okay";
         bitrate = <19200>;
+        uart = <&uart1>; 
         max-wait-percent = <150>;
     };
 };
