@@ -73,3 +73,15 @@
 	pinctrl-0 = <&uart0_tx_pa10 &uart0_rx_pa11>;
 	pinctrl-names = "default";
 };
+
+&uart1 {
+    pinctrl-0 = <&uart1_tx_pa17 &uart1_rx_pa18>;
+	pinctrl-names = "default";
+	current-speed = <19200>;
+    status = "okay";
+    lin0: lin0 {
+        compatible = "virtual,lin-uart";
+        status = "okay";
+        bitrate = <19200>;
+    };
+};
