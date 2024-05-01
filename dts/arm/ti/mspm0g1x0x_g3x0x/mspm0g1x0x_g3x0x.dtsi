@@ -86,6 +86,13 @@
 
 	};
 
+    lin0: lin0 {
+        compatible = "virtual,lin-uart";
+        status = "disabled";
+        uart = <&uart1>;
+        bitrate = <19200>;
+    };
+
 };
 
 &nvic {

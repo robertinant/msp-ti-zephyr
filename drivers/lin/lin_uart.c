@@ -553,7 +553,7 @@ static struct lin_driver_api lin_uart_api = {
 
 #define LIN_UART_INIT(n)                                        \
     static const struct lin_uart_config lin_uart_config_##n = { \
-        .uart_dev         = DEVICE_DT_GET(DT_INST_PARENT(n)),   \
+        .uart_dev         = DEVICE_DT_GET(DT_INST_PROP(n, uart)),   \
         .max_wait_percent = DT_INST_PROP(n, max_wait_percent),  \
     };                                                          \
                                                                 \
