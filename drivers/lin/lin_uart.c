@@ -19,6 +19,16 @@ static const uint8_t PID[LIN_NUM_ID] = {
     0x78, 0x39, 0xba, 0xfb, 0x3c, 0x7d, 0xfe, 0xbf,
 };
 
+struct uart_mspm0_config {
+	UART_Regs *regs;
+	uint32_t clock_frequency;
+	uint32_t current_speed;
+	const struct pinctrl_dev_config *pinctrl;
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	uart_irq_config_func_t irq_config_func;
+#endif
+};
+
 static const uint8_t BREAK = 0x00;
 static const uint8_t SYNC  = 0x55;
 
@@ -104,7 +114,9 @@ static void lin_uart_set_nominal_bitrate(const struct device *dev) {
 
 static void lin_uart_clear_isr(const struct device *dev) {
     const struct lin_uart_config *cfg = dev->config;
-    while (uart_irq_update(cfg->uart_dev) && uart_irq_is_pending(cfg->uart_dev)) {
+    const struct device * uart_dev = cfg->uart_dev;
+	const struct uart_mspm0_config * uart_config = uart_dev->config;
+    while (uart_irq_update(cfg->uart_dev) && !DL_UART_isRXFIFOEmpty(uart_config->regs)) {
         if (uart_irq_rx_ready(cfg->uart_dev)) {
             uint8_t dummy;
             uart_err_check(cfg->uart_dev);
@@ -165,7 +177,9 @@ static void lin_uart_irq_handler(const struct device *uart_dev, void *lin_dev) {
     k_timer_stop(&data->timer);
 
     bool spurious = true;
-    while (uart_irq_update(uart_dev) && uart_irq_is_pending(uart_dev)) {
+
+	const struct uart_mspm0_config * uart_config = uart_dev->config;
+    while (uart_irq_update(uart_dev) && !DL_UART_isRXFIFOEmpty(uart_config->regs)) {
         /** NOTE: Common driver issue is that it clears errors even if there is no error.
          *  This behavior must be patched if present.
          */

@@ -56,14 +56,9 @@ static void rx_cb(const struct device *dev, int error, const struct lin_frame *m
 int main() {
     // configure
     k_sem_init(&lock, 0, 1);
-    // if (lin_set_bitrate(dev, 19200) ||
-    //     lin_set_header_callback(dev, header_cb, NULL) ||
-    //     lin_set_tx_callback(dev, tx_cb, NULL) ||
-    //     lin_set_rx_callback(dev, rx_cb, NULL)) {
-    //     LOG_ERR("failed to configure");
-    // }
-
-    if (lin_set_header_callback(dev, header_cb, NULL) ||
+    if (
+        lin_set_bitrate(dev, 19200) ||
+        lin_set_header_callback(dev, header_cb, NULL) ||
         lin_set_tx_callback(dev, tx_cb, NULL) ||
         lin_set_rx_callback(dev, rx_cb, NULL)) {
         LOG_ERR("failed to configure");
@@ -83,9 +78,9 @@ int main() {
     lin_send(dev, &msg);
     k_sem_take(&lock, K_FOREVER);
 
-    lin_receive(dev, 0x01, LIN_CHECKSUM_AUTO, 0);
-    k_sem_take(&lock, K_FOREVER);
+    // lin_receive(dev, 0x01, LIN_CHECKSUM_AUTO, 0);
+    // k_sem_take(&lock, K_FOREVER);
 
-    // responder
-    lin_set_mode(dev, LIN_MODE_RESPONDER);
+    // // responder
+    // lin_set_mode(dev, LIN_MODE_RESPONDER);
 }

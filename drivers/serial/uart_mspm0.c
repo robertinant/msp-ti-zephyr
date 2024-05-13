@@ -100,6 +100,30 @@ static void uart_mspm0_poll_out(const struct device *dev, unsigned char c)
 	DL_UART_Main_transmitDataBlocking(config->regs, c);
 }
 
+
+#ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
+static int uart_mspm0_configure(const struct device *dev,
+				const struct uart_config *cfg)
+{
+
+    /* Get the mspm0 specific configuration fields from their structs */
+    const struct uart_mspm0_config *config = dev->config;
+	// struct uart_mspm0_data *data = dev->data;
+
+    /* Store the new bitrate to set into the current speed field */
+    // config->current_speed = cfg->baudrate;
+
+    /* Update the UART instance with the new baudrate */
+    // DL_UART_Main_configBaudRate(config->regs, (uint32_t) 32000000, config->current_speed);
+
+    DL_UART_Main_configBaudRate(config->regs, (uint32_t) 32000000, cfg->baudrate);
+
+	return 0;
+}
+
+#endif /* CONFIG_UART_USE_RUNTIME_CONFIGURE */
+
+
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 
 #define UART_MSPM0_TX_INTERRUPTS (DL_UART_MAIN_INTERRUPT_TX | DL_UART_MAIN_INTERRUPT_EOT_DONE)
@@ -240,6 +264,9 @@ static void uart_mspm0_##index##_irq_register(const struct device *dev)	\
 static const struct uart_driver_api uart_mspm0_driver_api = {
 	.poll_in = uart_mspm0_poll_in,
 	.poll_out = uart_mspm0_poll_out,
+#ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
+	.configure = uart_mspm0_configure,
+#endif /* CONFIG_UART_USE_RUNTIME_CONFIGURE */
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.fifo_fill = uart_mspm0_fifo_fill,
 	.fifo_read = uart_mspm0_fifo_read,
