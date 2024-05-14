@@ -100,6 +100,30 @@ static void uart_mspm0_poll_out(const struct device *dev, unsigned char c)
 	DL_UART_Main_transmitDataBlocking(config->regs, c);
 }
 
+static int uart_mspm0_err_check(const struct device *dev) {
+    const struct uart_mspm0_config *config = dev->config;
+    int err = 0;
+
+    if (DL_UART_Main_getErrorStatus(config->regs, DL_UART_ERROR_OVERRUN))
+    {
+     	DL_UART_Main_clearInterruptStatus(config->regs, DL_UART_INTERRUPT_OVERRUN_ERROR);
+        err |= UART_ERROR_OVERRUN;
+    }
+
+    if (DL_UART_Main_getErrorStatus(config->regs, DL_UART_ERROR_PARITY))
+    {
+     	DL_UART_Main_clearInterruptStatus(config->regs, DL_UART_INTERRUPT_PARITY_ERROR);
+        err |= UART_ERROR_PARITY;
+    }
+
+    // if (DL_UART_Main_getErrorStatus(config->regs, DL_UART_ERROR_FRAMING))
+    // {
+    //  	DL_UART_Main_clearInterruptStatus(config->regs, DL_UART_INTERRUPT_FRAMING_ERROR);
+    //     err |= UART_ERROR_FRAMING;
+    // }
+
+    return err;
+}
 
 #ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
 static int uart_mspm0_configure(const struct device *dev,
@@ -194,6 +218,18 @@ static int uart_mspm0_irq_rx_ready(const struct device *dev)
 		config->regs, UART_MSPM0_RX_INTERRUPTS)) ? 1 : 0;
 }
 
+static void uart_mspm0_irq_err_enable(const struct device *dev) {
+    const struct uart_mspm0_config *config = dev->config;
+    // DL_UART_Main_enableInterrupt(config->regs, (DL_UART_INTERRUPT_OVERRUN_ERROR | DL_UART_INTERRUPT_PARITY_ERROR | DL_UART_INTERRUPT_FRAMING_ERROR));
+    DL_UART_Main_enableInterrupt(config->regs, (DL_UART_INTERRUPT_OVERRUN_ERROR | DL_UART_INTERRUPT_PARITY_ERROR));
+}
+
+static void uart_mspm0_irq_err_disable(const struct device *dev) {
+    const struct uart_mspm0_config *config = dev->config;
+    // DL_UART_Main_disableInterrupt(config->regs, (DL_UART_INTERRUPT_OVERRUN_ERROR | DL_UART_INTERRUPT_PARITY_ERROR | DL_UART_INTERRUPT_FRAMING_ERROR));
+    DL_UART_Main_disableInterrupt(config->regs, (DL_UART_INTERRUPT_OVERRUN_ERROR | DL_UART_INTERRUPT_PARITY_ERROR));
+}
+
 static int uart_mspm0_irq_is_pending(const struct device *dev)
 {
 	const struct uart_mspm0_config *config = dev->config;
@@ -264,6 +300,7 @@ static void uart_mspm0_##index##_irq_register(const struct device *dev)	\
 static const struct uart_driver_api uart_mspm0_driver_api = {
 	.poll_in = uart_mspm0_poll_in,
 	.poll_out = uart_mspm0_poll_out,
+    .err_check = uart_mspm0_err_check,
 #ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
 	.configure = uart_mspm0_configure,
 #endif /* CONFIG_UART_USE_RUNTIME_CONFIGURE */
@@ -277,6 +314,8 @@ static const struct uart_driver_api uart_mspm0_driver_api = {
 	.irq_rx_disable = uart_mspm0_irq_rx_disable,
 	.irq_tx_complete = uart_mspm0_irq_tx_complete,
 	.irq_rx_ready = uart_mspm0_irq_rx_ready,
+    .irq_err_enable   = uart_mspm0_irq_err_enable,
+    .irq_err_disable  = uart_mspm0_irq_err_disable,
 	.irq_is_pending = uart_mspm0_irq_is_pending,
 	.irq_update = uart_mspm0_irq_update,
 	.irq_callback_set = uart_mspm0_irq_callback_set,
