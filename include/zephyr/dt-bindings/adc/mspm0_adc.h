@@ -14,9 +14,9 @@
  * Sets ti,clk-source
  * @{
  */
-#define MSP_ADC_CLOCK_SYSOSC        0
-#define MSP_ADC_CLOCK_ULPCLK        1
-#define MSP_ADC_CLOCK_HFCLK	        2
+#define MSP_ADC_CLOCK_ULPCLK	0
+#define MSP_ADC_CLOCK_SYSOSC	1
+#define MSP_ADC_CLOCK_HFCLK		2
 
 /** @} */
 
