@@ -13,3 +13,9 @@ config I2C_CONTROLLER_TIMEOUT
 	default new
 	help
 	  Enable support for timeout feature of device
+
+config I2C_MSPM0_MULTI_TARGET_ADDRESS
+	bool "I2C Multi Target Address"
+	default y
+	help 
+	  Enable a target peripheral to respond to multiple addresses, including an address range. 
