@@ -65,6 +65,12 @@ struct i2c_mspm0_data {
 	volatile enum i2c_mspm0_state state; /* Current state of I2C transmission */
 	struct i2c_msg msg;		/* Cache msg */
 	uint16_t addr;			/* Cache slave address */
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+	uint16_t secondaryAddr;	/* Secondary slave address */
+	uint16_t secondaryDontCareMask; /* Secondary don't care mask. Muxed with
+								     * the secondary address to create a range
+									 * of acceptable addresses. */
+#endif
 	uint32_t count;			/* Count for progress in I2C transmission */
 	uint32_t dev_config;	/* Configuration last passed */
 	uint32_t is_target;
@@ -92,10 +98,10 @@ static int i2c_mspm0_configure(const struct device *dev, uint32_t dev_config)
 	/* Config I2C speed */
 	switch (I2C_SPEED_GET(dev_config)) {
 	case I2C_SPEED_STANDARD:
-		bitrate = 7;
+		bitrate = 31;
 		break;
 	case I2C_SPEED_FAST:
-		bitrate = 31;
+		bitrate = 7;
 		break;
 	default:
 		k_sem_give(&data->i2c_busy_sem);
@@ -110,8 +116,6 @@ static int i2c_mspm0_configure(const struct device *dev, uint32_t dev_config)
 	k_sem_give(&data->i2c_busy_sem);
 	return 0;
 }
-
-
 
 static int i2c_mspm0_get_config(const struct device *dev, uint32_t *dev_config)
 {
@@ -179,18 +183,16 @@ static int i2c_mspm0_receive(const struct device *dev, struct i2c_msg msg, uint1
 	DL_I2C_startControllerTransfer(config->base, data->addr,
 				       DL_I2C_CONTROLLER_DIRECTION_RX, data->msg.len);
 
-	/* Wait for all bytes to be received in interrupt */
-	while ((data->state != I2C_MSPM0_RX_COMPLETE) &&
-			(data->state != I2C_MSPM0_TIMEOUT) &&
-			(data->state != I2C_MSPM0_ERROR))
-		;
+
+	while (!(DL_I2C_getControllerStatus(config->base) & DL_I2C_CONTROLLER_STATUS_IDLE));
 
 	if(data->state == I2C_MSPM0_TIMEOUT){
 		return -ETIMEDOUT;
 	}
 
 	/* If error, return error */
-	if (DL_I2C_getControllerStatus(config->base) & DL_I2C_CONTROLLER_STATUS_ERROR) {
+	if (((DL_I2C_getControllerStatus(config->base) & DL_I2C_CONTROLLER_STATUS_ERROR) != 0x00) ||
+		(data->state == I2C_MSPM0_ERROR)) {
 		return -EIO;
 	}
 
@@ -203,9 +205,9 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 	struct i2c_mspm0_data *data = dev->data;
 
 	/* Sending address without data is not supported */
-	// if (msg.len == 0 && !data->smbus_mode) {
-	// 	return -EIO;
-	// }
+	if (msg.len == 0 && !data->smbus_mode) {
+		return -EIO;
+	}
 
 	/* Update cached msg and addr */
 	data->msg = msg;
@@ -213,6 +215,9 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 
 	/* Update the state */
 	data->state = I2C_MSPM0_IDLE;
+
+	/* Flush anything that is left in the stale FIFO */
+	DL_I2C_flushControllerTXFIFO(config->base);
 
 	/*
 	 * Fill the FIFO
@@ -243,18 +248,15 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 	DL_I2C_startControllerTransfer(config->base, data->addr,
 					DL_I2C_CONTROLLER_DIRECTION_TX, data->msg.len);
 
-	/* Wait until the Controller sends all bytes */
-	while ((data->state != I2C_MSPM0_TX_COMPLETE) &&
-			(data->state != I2C_MSPM0_TIMEOUT) &&
-			(data->state != I2C_MSPM0_ERROR))
-		;
+	while (!(DL_I2C_getControllerStatus(config->base) & DL_I2C_CONTROLLER_STATUS_IDLE));
 
 	if(data->state == I2C_MSPM0_TIMEOUT){
 		return -ETIMEDOUT;
 	}
 
 	/* If error, return error */
-	if (DL_I2C_getControllerStatus(config->base) & DL_I2C_CONTROLLER_STATUS_ERROR) {
+	if (((DL_I2C_getControllerStatus(config->base) & DL_I2C_CONTROLLER_STATUS_ERROR) != 0x00) ||
+		(data->state == I2C_MSPM0_ERROR)) {
 		return -EIO;
 	}
 
@@ -290,7 +292,6 @@ static int i2c_mspm0_transfer(const struct device *dev, struct i2c_msg *msgs, ui
 		}
 	}
 
-
 	if(ret == -ETIMEDOUT){
 		i2c_mspm0_get_config(dev, &config);
 		i2c_mspm0_reset_peripheral_controller(dev);
@@ -319,23 +320,52 @@ static int i2c_mspm0_target_register(const struct device *dev,
 		return -ENOTSUP;
 	}
 
+#ifndef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+	if(target_config->flags & I2C_TARGET_FLAGS_SECONDARY_ADDR){
+		return -ENTOSUP;
+	}
+#endif
+
 	k_sem_take(&data->i2c_busy_sem, K_FOREVER);
 
 	if (data->is_target == true) {
 		/* device is already configured as a target */
 		if (target_config != data->target_config) {
-			/* a new target configuration has been given. Reconfigure
-			 * address and callbacks
-			 */
-			DL_I2C_disableInterrupt(config->base, TI_MSPM0_TARGET_INTERRUPTS);
-			DL_I2C_disableTarget(config->base);
-			DL_I2C_setTargetOwnAddress(config->base, target_config->address);
-			data->target_config = target_config;
-			data->target_callbacks = target_config->callbacks;
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+			if (target_config->flags & I2C_TARGET_FLAGS_SECONDARY_ADDR){
+				/* parse the 8 - bit mask into don't care portion and
+				 * the address itself secondary address in the form:
+				 * mask | address. For example, if the value in address is
+				 * 0x031A, the range of addresses accepted is
+				 * 0'b00110XX, such that 0x18, 0x19, 0x1A, and 0x1B are matched.
+				 */
 
-			if (data->state == I2C_MSPM0_TARGET_PREEMPTED) {
+				data->secondaryAddr = target_config->address & 0xFF;
+				uint32_t secondaryMask = (0x0000FF00 & (uint32_t) target_config->address) >> 8;
+				DL_I2C_setTargetOwnAddressAlternate(config->base, data->secondaryAddr);
+				DL_I2C_setTargetOwnAddressAlternateMask(config->base, secondaryMask);
+				DL_I2C_enableTargetOwnAddressAlternate(config->base);
+			} else {
+#endif
+				/* a new target configuration has been given. Reconfigure
+				 * address and callbacks
+				 */
+				DL_I2C_disableInterrupt(config->base, TI_MSPM0_TARGET_INTERRUPTS);
+				DL_I2C_disableTarget(config->base);
+				DL_I2C_setTargetOwnAddress(config->base, target_config->address);
+				data->target_config = target_config;
+				data->target_callbacks = target_config->callbacks;
+
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+				/* clear any previous secondary configuration */
+				data->secondaryAddr = 0x00;
+				DL_I2C_disableTargetOwnAddressAlternate(config->base);
+			}
+#endif
+		if (data->state == I2C_MSPM0_TARGET_PREEMPTED) {
 				DL_I2C_clearInterruptStatus(config->base,
 							TI_MSPM0_TARGET_INTERRUPTS);
+				data->state = I2C_MSPM0_IDLE;
 			}
 		}
 		k_sem_give(&data->i2c_busy_sem);
@@ -491,6 +521,11 @@ static void i2c_mspm0_isr(const struct device *dev)
 		if (data->state == I2C_MSPM0_TARGET_STARTED) {
 			data->state = I2C_MSPM0_TARGET_RX_INPROGRESS;
 			if (data->target_callbacks->write_requested != NULL) {
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+				if(data->secondaryAddr != 0x00){
+					data->target_config->address = DL_I2C_getTargetAddressMatch(config->base);
+				}
+#endif
 				data->target_rx_valid = data->target_callbacks->write_requested(
 					data->target_config);
 			}
@@ -528,7 +563,11 @@ static void i2c_mspm0_isr(const struct device *dev)
 			data->state = I2C_MSPM0_TARGET_TX_INPROGRESS;
 			if(data->target_callbacks->read_requested != NULL){
 				uint8_t nextByte;
-
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+				if(data->secondaryAddr != 0x00){
+					data->target_config->address = DL_I2C_getTargetAddressMatch(config->base);
+				}
+#endif
 				data->target_tx_valid = data->target_callbacks->read_requested(
 					data->target_config, &nextByte);
 				if (data->target_tx_valid == 0) {
