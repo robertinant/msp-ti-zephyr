@@ -16,7 +16,7 @@ description: |
       };
 
     All device pin configurations should be placed in child nodes of the
-    'pinctrl' node, as in the i2c0 example shown at the end.
+    'pinctrl' node, as in the i2c example shown at the end.
 
     Here is a list of
     supported standard pin properties:
@@ -84,6 +84,7 @@ child-binding:
         - bias-disable
         - bias-pull-down
         - bias-pull-up
+        - bias-high-impedance
         - drive-open-drain
         - drive-open-source
         - drive-strength
