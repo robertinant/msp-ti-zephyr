@@ -287,7 +287,8 @@ static const struct uart_driver_api uart_mspm0_driver_api = {
 			{						\
 				.mode = DL_UART_MAIN_MODE_NORMAL,				\
 				.direction = DL_UART_MAIN_DIRECTION_TX_RX,		\
-				.flowControl = DL_UART_MAIN_FLOW_CONTROL_NONE,	\
+				.flowControl = (DT_INST_PROP(index, hw_flow_control)? \
+					DL_UART_MAIN_FLOW_CONTROL_RTS_CTS : DL_UART_MAIN_FLOW_CONTROL_NONE), \
 				.parity = DL_UART_MAIN_PARITY_NONE,				\
 				.wordLength = DL_UART_MAIN_WORD_LENGTH_8_BITS,	\
 				.stopBits = DL_UART_MAIN_STOP_BITS_ONE,			\
