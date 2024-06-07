@@ -36,6 +36,7 @@ struct uart_mspm0_data {
 	/* UART config structure */
 	DL_UART_Main_Config UART_Config;
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	uint32_t interruptState; /* Masked Interrupt Status when called by irq_update */
 	uart_irq_callback_user_data_t cb; /* Callback function pointer */
 	void *cb_data;                    /* Callback function arg */
 #endif                                    /* CONFIG_UART_INTERRUPT_DRIVEN */
@@ -119,6 +120,28 @@ static int uart_mspm0_fifo_read(const struct device *dev, uint8_t *rx_data, cons
 	return (int)DL_UART_Main_drainRXFIFO(config->regs, rx_data, size);
 }
 
+static void uart_mspm0_irq_rx_enable(const struct device *dev)
+{
+	const struct uart_mspm0_config *config = dev->config;
+
+	DL_UART_Main_enableInterrupt(config->regs, UART_MSPM0_RX_INTERRUPTS);
+}
+
+static void uart_mspm0_irq_rx_disable(const struct device *dev)
+{
+	const struct uart_mspm0_config *config = dev->config;
+
+	DL_UART_Main_disableInterrupt(config->regs, UART_MSPM0_RX_INTERRUPTS);
+}
+
+static int uart_mspm0_irq_rx_ready(const struct device *dev)
+{
+	struct uart_mspm0_data *const dev_data = dev->data;
+
+	return ((dev_data->interruptState & DL_UART_MAIN_INTERRUPT_RX) ==
+			DL_UART_MAIN_INTERRUPT_RX)? 1 : 0;
+}
+
 static void uart_mspm0_irq_tx_enable(const struct device *dev)
 {
 	const struct uart_mspm0_config *config = dev->config;
@@ -136,51 +159,43 @@ static void uart_mspm0_irq_tx_disable(const struct device *dev)
 static int uart_mspm0_irq_tx_ready(const struct device *dev)
 {
 	const struct uart_mspm0_config *config = dev->config;
+	struct uart_mspm0_data *const dev_data = dev->data;
 
-	return (DL_UART_Main_getEnabledInterruptStatus(
-		config->regs, DL_UART_MAIN_INTERRUPT_TX)) ? 0 : 1;
-}
-
-static void uart_mspm0_irq_rx_enable(const struct device *dev)
-{
-	const struct uart_mspm0_config *config = dev->config;
-
-	DL_UART_Main_enableInterrupt(config->regs, UART_MSPM0_RX_INTERRUPTS);
-}
-
-static void uart_mspm0_irq_rx_disable(const struct device *dev)
-{
-	const struct uart_mspm0_config *config = dev->config;
-
-	DL_UART_Main_disableInterrupt(config->regs, UART_MSPM0_RX_INTERRUPTS);
+	return (((dev_data->interruptState & DL_UART_MAIN_INTERRUPT_TX) ==
+			DL_UART_MAIN_INTERRUPT_TX) ||
+			DL_UART_Main_isTXFIFOEmpty(config->regs))? 1 : 0;
 }
 
 static int uart_mspm0_irq_tx_complete(const struct device *dev)
 {
-	const struct uart_mspm0_config *config = dev->config;
+	struct uart_mspm0_data *const dev_data = dev->data;
 
-	return (DL_UART_Main_isTXFIFOEmpty(config->regs)) ? 1 : 0;
-}
-
-static int uart_mspm0_irq_rx_ready(const struct device *dev)
-{
-	const struct uart_mspm0_config *config = dev->config;
-
-	return (DL_UART_Main_getEnabledInterruptStatus(
-		config->regs, UART_MSPM0_RX_INTERRUPTS)) ? 1 : 0;
+	return ((dev_data->interruptState & DL_UART_MAIN_INTERRUPT_EOT_DONE) ==
+			DL_UART_MAIN_INTERRUPT_EOT_DONE) ? 1 : 0;
 }
 
 static int uart_mspm0_irq_is_pending(const struct device *dev)
 {
-	const struct uart_mspm0_config *config = dev->config;
+	struct uart_mspm0_data *const dev_data = dev->data;
 
-	return (DL_UART_Main_getEnabledInterruptStatus(config->regs,
-		UART_MSPM0_RX_INTERRUPTS | UART_MSPM0_TX_INTERRUPTS)) ? 1 : 0;
+	return ((dev_data->interruptState != 0)?1:0);
 }
 
 static int uart_mspm0_irq_update(const struct device *dev)
 {
-	ARG_UNUSED(dev);
+	const struct uart_mspm0_config *config = dev->config;
+	struct uart_mspm0_data *const dev_data = dev->data;
+
+	dev_data->interruptState = DL_UART_Main_getEnabledInterruptStatus(
+		config->regs, UART_MSPM0_RX_INTERRUPTS | UART_MSPM0_TX_INTERRUPTS);
+
+	/*
+	 * Clear interrupts explicitly after storing all in the update. Interrupts
+	 * can be re-set by the MIS during the ISR should they be available.
+	 */
+
+	DL_UART_Main_clearInterruptStatus(config->regs, dev_data->interruptState);
+
 	return 1;
 }
 
@@ -205,21 +220,18 @@ static void uart_mspm0_isr(const struct device *dev)
 {
 	const struct uart_mspm0_config *config = dev->config;
 	struct uart_mspm0_data *const dev_data = dev->data;
-
-	int int_status = DL_UART_Main_getEnabledInterruptStatus(config->regs,
-		UART_MSPM0_RX_INTERRUPTS | UART_MSPM0_TX_INTERRUPTS);
+	uint32_t int_status;
 
 	/* Perform callback if defined */
 	if (dev_data->cb) {
 		dev_data->cb(dev, dev_data->cb_data);
+	} else {
+		/* error, callback necessary in order to make progress. Clear interrupts
+		 * temporarily. */
+		int_status = DL_UART_Main_getEnabledInterruptStatus(config->regs,
+			UART_MSPM0_TX_INTERRUPTS | UART_MSPM0_RX_INTERRUPTS);
+		DL_UART_Main_clearInterruptStatus(config->regs, int_status);
 	}
-
-	/*
-	 * Clear interrupts only after cb called, as Zephyr UART clients expect
-	 * to check interrupt status during the callback.
-	 */
-
-	DL_UART_Main_clearInterruptStatus(config->regs, int_status);
 
 }
 
