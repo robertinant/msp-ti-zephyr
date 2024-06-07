@@ -22,7 +22,6 @@ LOG_MODULE_REGISTER(i2c_mspm0);
 #include <ti/driverlib/dl_i2c.h>
 #include <ti/driverlib/dl_gpio.h>
 
-#define I2C_TARGET_FLAGS_ERROR_TIMEOUT	BIT(10)
 #define TI_MSPM0_TARGET_TIMEOUT_50_MS 	(193)
 
 #define TI_MSPM0_CONTROLLER_INTERRUPTS	\
@@ -126,6 +125,58 @@ static int i2c_mspm0_get_config(const struct device *dev, uint32_t *dev_config)
 	return 0;
 }
 
+static int i2c_mspm0_reset_peripheral_target(const struct device *dev){
+	const struct i2c_mspm0_config *config = dev->config;
+	struct i2c_mspm0_data *data = dev->data;
+
+	DL_I2C_reset(config->base);
+	DL_I2C_disablePower(config->base);
+
+	DL_I2C_enablePower(config->base);
+	delay_cycles(POWER_STARTUP_DELAY);
+
+	DL_I2C_disableTargetWakeup(config->base);
+
+	/* Config clocks and analog filter */
+	DL_I2C_setClockConfig(config->base,
+			(DL_I2C_ClockConfig *)&config->gI2CClockConfig);
+	DL_I2C_disableAnalogGlitchFilter(config->base);
+
+#ifdef CONFIG_I2C_TARGET_TIMEOUT
+	DL_I2C_enableTimeoutA(config->base);
+    DL_I2C_setTimeoutACount(config->base, TI_MSPM0_TARGET_TIMEOUT_50_MS);
+#endif /* CONFIG_I2C_TARGET_TIMEOUT */
+
+
+	DL_I2C_setTargetOwnAddress(config->base, data->addr);
+	DL_I2C_setTargetTXFIFOThreshold(config->base, DL_I2C_TX_FIFO_LEVEL_BYTES_1);
+	DL_I2C_setTargetRXFIFOThreshold(config->base, DL_I2C_RX_FIFO_LEVEL_BYTES_1);
+	DL_I2C_enableTargetTXTriggerInTXMode(config->base);
+	DL_I2C_enableTargetTXEmptyOnTXRequest(config->base);
+
+#ifdef CONFIG_I2C_MSPM0_MULTI_TARGET_ADDRESS
+	if(data->secondaryAddr != 0x00){
+		DL_I2C_setTargetOwnAddressAlternate(config->base, data->secondaryAddr);
+		DL_I2C_setTargetOwnAddressAlternateMask(config->base, data->secondaryDontCareMask);
+		DL_I2C_enableTargetOwnAddressAlternate(config->base);
+	}
+#endif
+
+	DL_I2C_clearInterruptStatus(
+		config->base, DL_I2C_INTERRUPT_TARGET_TXFIFO_EMPTY);
+
+	DL_I2C_enableInterrupt(config->base, TI_MSPM0_TARGET_INTERRUPTS);
+
+	data->state = I2C_MSPM0_IDLE;
+	/* erase the timeout flag */
+	data->target_config->flags &= ~I2C_TARGET_FLAGS_ERROR_TIMEOUT;
+
+	/* Enable module */
+	DL_I2C_enableTarget(config->base);
+
+	return 0;
+}
+
 static int i2c_mspm0_reset_peripheral_controller(const struct device *dev){
 	const struct i2c_mspm0_config *config = dev->config;
 
@@ -161,9 +212,6 @@ static int i2c_mspm0_reset_peripheral_controller(const struct device *dev){
 
 	/* Enable module */
 	DL_I2C_enableController(config->base);
-
-	/* Enable interrupts */
-	config->interrupt_init_function(dev);
 
 	return 0;
 }
@@ -205,7 +253,7 @@ static int i2c_mspm0_transmit(const struct device *dev, struct i2c_msg msg, uint
 	struct i2c_mspm0_data *data = dev->data;
 
 	/* Sending address without data is not supported */
-	if (msg.len == 0 && !data->smbus_mode) {
+	if (msg.len == 0) {
 		return -EIO;
 	}
 
@@ -341,9 +389,9 @@ static int i2c_mspm0_target_register(const struct device *dev,
 				 */
 
 				data->secondaryAddr = target_config->address & 0xFF;
-				uint32_t secondaryMask = (0x0000FF00 & (uint32_t) target_config->address) >> 8;
+				data->secondaryDontCareMask = (0x0000FF00 & (uint32_t) target_config->address) >> 8;
 				DL_I2C_setTargetOwnAddressAlternate(config->base, data->secondaryAddr);
-				DL_I2C_setTargetOwnAddressAlternateMask(config->base, secondaryMask);
+				DL_I2C_setTargetOwnAddressAlternateMask(config->base, data->secondaryDontCareMask);
 				DL_I2C_enableTargetOwnAddressAlternate(config->base);
 			} else {
 #endif
@@ -427,6 +475,10 @@ static int i2c_mspm0_target_unregister(const struct device *dev,
 	}
 
 	DL_I2C_disableTarget(config->base);
+
+	/* Configure Controller Mode */
+	DL_I2C_resetControllerTransfer(config->base);
+	DL_I2C_enableControllerClockStretching(config->base);
 
 	/* reconfigure the interrupt to use a slave isr? */
 	DL_I2C_disableInterrupt(config->base, TI_MSPM0_TARGET_INTERRUPTS);
@@ -642,20 +694,27 @@ static void i2c_mspm0_isr(const struct device *dev)
 
 		} else {
 			// Target Behavior
-			k_sem_give(&data->i2c_busy_sem);
+			data->target_config->flags |= I2C_TARGET_FLAGS_ERROR_TIMEOUT;
 
 			/* the event based notify will be done using a stop condition,
 				* as there is not another known way to notify the application that a
 				* timeout has occurred, so we set a custom flag that the application
 				* must check.
 				*/
-			data->target_config->flags |= I2C_TARGET_FLAGS_ERROR_TIMEOUT;
-			if (data->target_callbacks->stop) {
-				data->target_callbacks->stop(data->target_config);
-			}
-
 			DL_I2C_disableInterrupt(config->base, TI_MSPM0_TARGET_INTERRUPTS);
 			DL_I2C_clearInterruptStatus(config->base, TI_MSPM0_TARGET_INTERRUPTS);
+
+			if (data->target_callbacks->stop) {
+				int stopReturn = data->target_callbacks->stop(data->target_config);
+				if (stopReturn < 0){
+					/* Allow stop to determine whether the target is reset */
+					i2c_mspm0_reset_peripheral_target(dev);
+				}
+			} else {
+				/* if no stop, just reset anyways */
+				i2c_mspm0_reset_peripheral_target(dev);
+			}
+			k_sem_give(&data->i2c_busy_sem);
 		}
 		break;
 	default:
@@ -758,7 +817,9 @@ static const struct i2c_driver_api i2c_mspm0_driver_api = {
 		}	\
 	};		\
 	\
-	static struct i2c_mspm0_data i2c_mspm0_data_##index;	\
+	static struct i2c_mspm0_data i2c_mspm0_data_##index = { 	\
+		.secondaryAddr = 0x00, \
+	};	\
 	\
 	I2C_DEVICE_DT_INST_DEFINE(index, i2c_mspm0_init, NULL,				\
 		&i2c_mspm0_data_##index, &i2c_mspm0_cfg_##index, POST_KERNEL,	\
