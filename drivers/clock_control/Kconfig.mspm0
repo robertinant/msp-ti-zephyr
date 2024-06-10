@@ -1,0 +1,18 @@
+# TI MSPM0 Family
+
+# Copyright (c) 2024, Texas Instruments Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+config CLOCK_CONTROL_MSPM0
+	bool "TI MSPM0 clock"
+	default y
+	depends on DT_HAS_TI_MSPM0_CLOCK_CONTROL_ENABLED
+	help
+	  This option enables the TI MSPM0 Clock Control Enabler
+
+config CLOCK_CONTROL_MSPM0_USE_PLL
+	bool "TI MSPM0 Use PLL" 
+	default n 
+	help 
+	  This option enables the PLL on MSPM0 devices (if equipped)
+	

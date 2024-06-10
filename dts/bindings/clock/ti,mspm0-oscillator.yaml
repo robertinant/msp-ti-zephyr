@@ -1,0 +1,15 @@
+# Copyright (c) 2024 Texas Instruments Inc. 
+# SPDX-License-Identifier: Apache-2.0
+
+description: TI MSPM0 Oscillator
+
+compatible: "ti,mspm0-oscillator"
+
+include: [fixed-clock.yaml]
+
+properties:
+  clock-frequency:
+    required: true
+
+clock-cells: 
+  - name

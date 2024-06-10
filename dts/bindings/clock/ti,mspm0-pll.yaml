@@ -1,0 +1,53 @@
+# Copyright (c) 2024 Texas Instruments Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+description: TI MSPM0 Phase Locked Loop
+
+compatible: "ti,mspm0-pll"
+
+include: [clock-controller.yaml, base.yaml]
+
+properties:
+  clocks:
+    required: true
+    description: |
+      Clock reference source
+
+  "#clock-cells": 
+    const: 0
+
+  p-div: 
+    type: int
+    required: true
+    enum:
+      - 1
+      - 2
+      - 4
+      - 8
+    description: |
+      pdiv
+
+  q-div: 
+    type: int
+    required: true
+    description: |
+      qdiv
+      Valid Range: 2 - 128
+
+  clk0-div:
+    type: int
+    required: false
+    description: |
+      Valid Range: 1 - 16
+
+  clk1-div:
+    type: int
+    required: false
+    description: |
+      Valid Range: 1 - 16
+
+  clk2X-div:
+    type: int
+    required: false
+    description: |
+      Valid Range: 1 - 16
