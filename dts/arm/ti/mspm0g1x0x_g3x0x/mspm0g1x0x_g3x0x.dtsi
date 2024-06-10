@@ -30,6 +30,27 @@
 		#clock-cells = <0>;
 	};
 
+	clocks: clocks {
+		sysosc: sysosc {
+			compatible = "ti,mspm0-oscillator";
+			clock-frequency = <32000000>;
+		};
+
+		lfosc: lfosc {
+			compatible = "ti,mspm0-oscillator";
+			clock-frequency = <32678>;
+		};
+		
+		pll: pll {
+			compatible = "ti,mspm0-pll";
+			clocks = <&sysosc>;
+			p-div = <1>;
+			q-div = <5>; 
+			clk0-div = <1>;
+			clk1-div = <1>;
+		};
+	};
+
 	soc {
 
 		pinctrl: pin-controller@400a0000{
