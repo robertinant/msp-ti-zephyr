@@ -17,3 +17,6 @@ CONFIG_UART_CONSOLE=y
 
 # Enable pinctrl
 CONFIG_PINCTRL=y
+
+# Enable Clock Control
+CONFIG_CLOCK_CONTROL=y

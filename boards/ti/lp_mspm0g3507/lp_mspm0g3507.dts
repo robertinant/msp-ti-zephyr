@@ -6,6 +6,7 @@
 #include <ti/mspm0g1x0x_g3x0x/mspm0g350x-pinctrl.dtsi>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 
+
 / {
 	model = "TI LP_MSPM0G3507";
 	compatible = "ti,mspm0g3507";
@@ -56,7 +57,13 @@
 };
 
 &cpu0 {
-	clock-frequency = <32000000>;
+	clock-frequency = <DT_FREQ_M(80)>;
+};
+
+&clkmux {
+	clock-source = <&pll>;
+	clock-frequency = <DT_FREQ_M(80)>;
+	uclk-div = <2>;
 };
 
 &gpioa {
