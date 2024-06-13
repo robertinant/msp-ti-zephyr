@@ -10,12 +10,10 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/drivers/clock_control.h>
+#include <zephyr/drivers/clock_control/mspm0_clock_control.h>
 #include <zephyr/irq.h>
 #include <soc.h>
-
-/* Defines for UART0 */
-#define UART_0_IBRD_33_kHZ_9600_BAUD (1)
-#define UART_0_FBRD_33_kHZ_9600_BAUD (9)
 
 /* Driverlib includes */
 #include <ti/driverlib/dl_uart_main.h>
@@ -24,6 +22,7 @@ struct uart_mspm0_config {
 	UART_Regs *regs;
 	uint32_t clock_frequency;
 	uint32_t current_speed;
+	const struct mspm0_clockSys *clock_subsys;
 	const struct pinctrl_dev_config *pinctrl;
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	uart_irq_config_func_t irq_config_func;
@@ -53,6 +52,8 @@ static int uart_mspm0_init(const struct device *dev)
 {
 	const struct uart_mspm0_config *config = dev->config;
 	struct uart_mspm0_data *data = dev->data;
+	const struct device *const clk_dev = DEVICE_DT_GET(DT_NODELABEL(clkmux));
+	uint32_t clock_rate;
 	int ret;
 
 	/* Reset power */
@@ -68,14 +69,20 @@ static int uart_mspm0_init(const struct device *dev)
 
 	/* Set UART configs */
 	DL_UART_Main_setClockConfig(config->regs,
-				    (DL_UART_Main_ClockConfig *)&data->UART_ClockConfig);
+				(DL_UART_Main_ClockConfig *)&data->UART_ClockConfig);
 	DL_UART_Main_init(config->regs, (DL_UART_Main_Config *)&data->UART_Config);
 
 	/*
 	 * Configure baud rate by setting oversampling and baud rate divisor
 	 * from the device tree data current-speed
 	 */
-	DL_UART_Main_configBaudRate(config->regs, 32000000, config->current_speed);
+	ret = clock_control_get_rate(clk_dev, (clock_control_subsys_t)config->clock_subsys, &clock_rate);
+
+	if(ret < 0){
+		return ret;
+	}
+
+	DL_UART_Main_configBaudRate(config->regs, clock_rate, config->current_speed);
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	config->irq_config_func(dev);
@@ -280,19 +287,22 @@ static const struct uart_driver_api uart_mspm0_driver_api = {
 									\
 	PINCTRL_DT_INST_DEFINE(index);	\
 	\
+	static const struct mspm0_clockSys mspm0_uart_clockSys##index = MSPM0_CLOCK_SUBSYS_FN(index);\
+	\
 	MSP_UART_IRQ_REGISTER(index)	\
 	\
 	static const struct uart_mspm0_config uart_mspm0_cfg_##index = {	\
 		.regs = (UART_Regs *)DT_INST_REG_ADDR(index),		\
 		.current_speed = DT_INST_PROP(index, current_speed),\
 		.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),	\
-		IF_ENABLED(CONFIG_UART_INTERRUPT_DRIVEN,	\
+		.clock_subsys = &mspm0_uart_clockSys##index,	\
+		IF_ENABLED(CONFIG_UART_INTERRUPT_DRIVEN,\
 		(.irq_config_func = uart_mspm0_##index##_irq_register,)) \
 	};								\
 									\
 	static struct uart_mspm0_data uart_mspm0_data_##index = {	\
 		.UART_ClockConfig = {		\
-			.clockSel = DL_UART_MAIN_CLOCK_BUSCLK,				\
+			.clockSel = (DT_INST_CLOCKS_CELL(index, bus) & MSPM0_CLOCK_SEL_MASK),	\
 			.divideRatio = DL_UART_MAIN_CLOCK_DIVIDE_RATIO_1	\
 		},							\
 		.UART_Config =				\
