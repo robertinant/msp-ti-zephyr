@@ -10,6 +10,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/pinctrl.h>
+#include <zephyr/drivers/clock_control.h>
+#include <zephyr/drivers/clock_control/mspm0_clock_control.h>
 #include <soc.h>
 
 /* Logging includes */
@@ -54,8 +56,9 @@ enum i2c_mspm0_state {
 
 struct i2c_mspm0_config {
 	I2C_Regs * base;
-	uint32_t clock_frequency;
+	uint32_t bitrate;
 	DL_I2C_ClockConfig gI2CClockConfig;
+	const struct mspm0_clockSys *clock_subsys;
 	const struct pinctrl_dev_config *pinctrl;
 	void (*interrupt_init_function)(const struct device *dev);
 };
@@ -84,7 +87,17 @@ static int i2c_mspm0_configure(const struct device *dev, uint32_t dev_config)
 {
 	const struct i2c_mspm0_config *config = dev->config;
 	struct i2c_mspm0_data *data = dev->data;
-	uint32_t bitrate;
+	const struct device *const clk_dev = DEVICE_DT_GET(DT_NODELABEL(clkmux));
+	uint32_t clockRate;
+	uint32_t desiredSpeed;
+	int32_t period;
+	int ret;
+
+	ret = clock_control_get_rate(clk_dev, (clock_control_subsys_t)config->clock_subsys, &clockRate);
+
+	if(ret < 0){
+		return -ENODEV;
+	}
 
 	k_sem_take(&data->i2c_busy_sem, K_FOREVER);
 
@@ -97,23 +110,36 @@ static int i2c_mspm0_configure(const struct device *dev, uint32_t dev_config)
 	/* Config I2C speed */
 	switch (I2C_SPEED_GET(dev_config)) {
 	case I2C_SPEED_STANDARD:
-		bitrate = 31;
+		desiredSpeed = 100000;
 		break;
 	case I2C_SPEED_FAST:
-		bitrate = 7;
+		desiredSpeed = 400000;
 		break;
 	default:
 		k_sem_give(&data->i2c_busy_sem);
 		return -EINVAL;
 	}
 
+	/* Calculate the timer period based on the desired speed and clock rate.
+	 * This function works out to be ceil(clockRate/(desiredSpeed*10)) - 1
+	 */
+
+	period = clockRate / (desiredSpeed * 10);
+	period -= (clockRate % (desiredSpeed * 10) == 0)?1:0;
+
 	/* Set the I2C speed */
-	DL_I2C_setTimerPeriod(config->base, bitrate);
+	if(period <= 0){
+		ret = -EINVAL;
+	} else {
+		ret = 0;
+		DL_I2C_setTimerPeriod(config->base, period);
+	}
 
 	data->dev_config = dev_config;
 
 	k_sem_give(&data->i2c_busy_sem);
-	return 0;
+
+	return ret;
 }
 
 static int i2c_mspm0_get_config(const struct device *dev, uint32_t *dev_config)
@@ -758,7 +784,7 @@ static int i2c_mspm0_init(const struct device *dev)
 
 
 	/* Set frequency */
-	uint32_t speed_config = i2c_map_dt_bitrate(config->clock_frequency);
+	uint32_t speed_config = i2c_map_dt_bitrate(config->bitrate);
 
 	k_sem_give(&data->i2c_busy_sem);
 	i2c_mspm0_configure(dev, speed_config);
@@ -804,15 +830,18 @@ static const struct i2c_driver_api i2c_mspm0_driver_api = {
 	\
 	PINCTRL_DT_INST_DEFINE(index);	\
 	\
-	INTERRUPT_INIT_FUNCTION_DECLARATION(index);		\
+	static const struct mspm0_clockSys mspm0_i2c_clockSys##index = MSPM0_CLOCK_SUBSYS_FN(index);\
+	\
+	INTERRUPT_INIT_FUNCTION_DECLARATION(index);	\
 	\
 	static const struct i2c_mspm0_config i2c_mspm0_cfg_##index = {		\
 		.base = (I2C_Regs *) DT_INST_REG_ADDR(index),					\
-		.clock_frequency = DT_INST_PROP(index, clock_frequency),		\
+		.clock_subsys = &mspm0_i2c_clockSys##index,			\
+		.bitrate = DT_INST_PROP(index, clock_frequency),	\
 		.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),				\
 		.interrupt_init_function = i2c_mspm0_interrupt_init_##index,	\
 		.gI2CClockConfig = {	\
-			.clockSel = DL_I2C_CLOCK_BUSCLK,		\
+			.clockSel = (DT_INST_CLOCKS_CELL(index, bus) & MSPM0_CLOCK_SEL_MASK),	\
 			.divideRatio = DL_I2C_CLOCK_DIVIDE_1,	\
 		}	\
 	};		\
