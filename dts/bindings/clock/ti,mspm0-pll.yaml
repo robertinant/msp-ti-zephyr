@@ -25,29 +25,35 @@ properties:
       - 4
       - 8
     description: |
-      pdiv
+      pdiv is the pre-divider of teh output. ref_in / pdiv * qdiv = VCO
 
   q-div: 
     type: int
     required: true
     description: |
-      qdiv
+      qdiv functions as a multiplier value for the ref_in / pdiv * qdiv = VCO 
       Valid Range: 2 - 128
 
   clk0-div:
     type: int
     required: false
     description: |
+      CLK0 PLL output is only enabled if the divider is present. Use CLK0 on 
+      the MSPM0 to output to the MCLK, UCLK, and CPUCLK
       Valid Range: 1 - 16
 
   clk1-div:
     type: int
     required: false
     description: |
+      CLK1 PLL output is only enabled if the divider is present. Use CLK1 on 
+      the MSPM0 to output to the CANCLK, FCC, or output via EXCLK
       Valid Range: 1 - 16
 
-  clk2X-div:
+  clk2x-div:
     type: int
     required: false
     description: |
+      CLK2X PLL output is only enabled if the divider is present. Use CLK2X on 
+      the MSPM0 to output to the MCLK, UCLK, and CPUCLK instead of CLK0
       Valid Range: 1 - 16

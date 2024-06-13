@@ -5,11 +5,15 @@ description: TI MSPM0 Oscillator
 
 compatible: "ti,mspm0-oscillator"
 
-include: [fixed-clock.yaml]
+include: [clock-controller.yaml]
 
 properties:
+  "#clock-cells":
+    const: 1
+
   clock-frequency:
+    type: int
     required: true
 
-clock-cells: 
-  - name
+clock-cells:
+  - id
