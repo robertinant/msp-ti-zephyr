@@ -102,18 +102,19 @@ static void uart_mspm0_poll_out(const struct device *dev, unsigned char c)
 
 static int uart_mspm0_err_check(const struct device *dev) {
     const struct uart_mspm0_config *config = dev->config;
-    int err = 0;
+	int err = 0;
+    uint32_t errorMask = 0U;
 
-    if (DL_UART_Main_getErrorStatus(config->regs, DL_UART_ERROR_OVERRUN))
+    if (DL_UART_getEnabledInterruptStatus(config->regs, DL_UART_INTERRUPT_OVERRUN_ERROR))
     {
-     	DL_UART_Main_clearInterruptStatus(config->regs, DL_UART_INTERRUPT_OVERRUN_ERROR);
         err |= UART_ERROR_OVERRUN;
+        errorMask |= DL_UART_INTERRUPT_OVERRUN_ERROR;
     }
 
-    if (DL_UART_Main_getErrorStatus(config->regs, DL_UART_ERROR_PARITY))
+    if (DL_UART_getEnabledInterruptStatus(config->regs, DL_UART_INTERRUPT_OVERRUN_ERROR))
     {
-     	DL_UART_Main_clearInterruptStatus(config->regs, DL_UART_INTERRUPT_PARITY_ERROR);
         err |= UART_ERROR_PARITY;
+        errorMask |= DL_UART_INTERRUPT_PARITY_ERROR;
     }
 
     // if (DL_UART_Main_getErrorStatus(config->regs, DL_UART_ERROR_FRAMING))
@@ -121,6 +122,11 @@ static int uart_mspm0_err_check(const struct device *dev) {
     //  	DL_UART_Main_clearInterruptStatus(config->regs, DL_UART_INTERRUPT_FRAMING_ERROR);
     //     err |= UART_ERROR_FRAMING;
     // }
+
+    if (errorMask)
+    {
+        DL_UART_Main_clearInterruptStatus(config->regs, errorMask);
+    }
 
     return err;
 }
