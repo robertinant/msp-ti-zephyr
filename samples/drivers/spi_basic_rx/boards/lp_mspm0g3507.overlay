@@ -1,0 +1,6 @@
+&spi1 {
+	pinctrl-0 = <&spi1_sclk_pb9_peripheral &spi1_pico_pb8_peripheral &spi1_poci_pb7_peripheral &spi1_cs0_pb6_peripheral>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpiob 6 GPIO_ACTIVE_LOW>;
+	status = "okay";
+};
