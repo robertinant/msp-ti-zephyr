@@ -37,7 +37,7 @@ int main(void)
 	if (ret < 0) {
 		return 0;
 	}
-
+	flash_erase()
 	while (1) {
 		ret = gpio_pin_toggle_dt(&led);
 		if (ret < 0) {

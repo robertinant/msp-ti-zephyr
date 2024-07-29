@@ -41,12 +41,12 @@ static void flash_mspm0_flush_caches(const struct device *dev, off_t offset, siz
 }
 
 
-static int flash_mspm0_erase(const struct device *dev, off_t offset, size_t size){
+static int flash_mspm0_erase(const struct device *dev, off_t offset, size_t len){
     // int rc;
-    // if(!flash_mspm0_valid_range(dev, offset, len, true)){
-    //     LOG_ERR("Erase range invalid. Offset %ld, len: %zu", (long int) offset, len);
-    //     return -EINVAL;
-    // }
+    if(!flash_mspm0_valid_range(dev, offset, len, true)){
+        LOG_ERR("Erase range invalid. Offset %ld, len: %zu", (long int) offset, len);
+        return -EINVAL;
+    }
 
     // if(!len){
     //     return 0;
@@ -55,15 +55,17 @@ static int flash_mspm0_erase(const struct device *dev, off_t offset, size_t size
     //FIXME: flash_mspm0_sem_take(dev);
     bool status = true;
     // LOG_DBG("Erase offset: %ld, len: %zu", (long int) offset, len);
-    DL_FlashCTL_unprotectSector(FLASH_MSPM0_REGS, addr, regionSelect);
-    DL_FlashCTL_eraseMemory(FLASH_MSPM0_REGS, addr, memorySize);
+    DL_FlashCTL_unprotectSector(FLASH_MSPM0_REGS, offset, DL_FLASHCTL_REGION_SELECT_MAIN);
+    DL_FlashCTL_eraseMemory(FLASH_MSPM0_REGS, offset, DL_FLASHCTL_COMMAND_SIZE_SECTOR);
     
     status = DL_FlashCTL_waitForCmdDone(FLASH_MSPM0_REGS);
 
     if(!status){
+        DL_FlashCTL_protectSector(FLASH_MSPM0_REGS, offset, DL_FLASHCTL_REGION_SELECT_MAIN);
         return -EINVAL;
     }
     else{
+        DL_FlashCTL_protectSector(FLASH_MSPM0_REGS, offset, DL_FLASHCTL_REGION_SELECT_MAIN);
         return 0;
     }
     /*FIXME: only need unprotect, erase, and wait for completion. return 0 on success*/
