@@ -20,3 +20,6 @@ CONFIG_PINCTRL=y
 
 # Enable Clock Control
 CONFIG_CLOCK_CONTROL=y
+
+# Enable flash
+CONFIG_FLASH=y
