@@ -23,7 +23,7 @@
  * See the sample documentation for information on how to fix this.
  */
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
-
+const struct device *const dev = DEVICE_DT_GET(FLASH_0_NODE);
 int main(void)
 {
 	int ret;
@@ -37,7 +37,7 @@ int main(void)
 	if (ret < 0) {
 		return 0;
 	}
-	flash_erase()
+	flash_erase(dev, MAIN_BASE_ADDRESS, 1000);
 	while (1) {
 		ret = gpio_pin_toggle_dt(&led);
 		if (ret < 0) {
