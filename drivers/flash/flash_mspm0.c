@@ -6,7 +6,7 @@
 #include <driverlib/dl_flashctl.h>
 #include "flash_mspm0.h"
 
-#define DT_DRV_COMPAT ti_mspm0_flash
+#define DT_DRV_COMPAT ti_mspm0_flash_controller
 
 /*Functions I think are probably good begin here*/
 LOG_MODULE_REGISTER(flash_mspm0, CONFIG_FLASH_LOG_LEVEL); 

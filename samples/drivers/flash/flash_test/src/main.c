@@ -6,16 +6,20 @@
 
 #include <stdio.h>
 #include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include<zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/flash.h>
 
 /* 1000 msec = 1 sec */
-#define SLEEP_TIME_MS   1000
+#define SLEEP_TIME_MS   1024
 
 /* The devicetree node identifier for the "led0" alias. */
 #define LED0_NODE DT_ALIAS(led0)
 
-#define MAIN_BASE_ADDRESS (0x00001000)
+#define MAIN_BASE_ADDRESS (0x00020000)
+
+#define FLASH_0_NODE DT_NODELABEL(flashctl)
 
 
 /*

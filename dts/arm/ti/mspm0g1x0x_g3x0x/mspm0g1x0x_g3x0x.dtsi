@@ -84,6 +84,11 @@
 			status = "disabled";
 		};
 
+		flashctl: flashctl@400cd000{
+			compatible = "ti,mspm0-flash-controller";
+			reg = <0x400cd000 0x2000>;
+			status = "okay";
+		};
 	};
 };
 

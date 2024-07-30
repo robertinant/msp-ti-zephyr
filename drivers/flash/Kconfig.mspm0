@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2024 Texas Instruments
 
-config FLASH_MSPM0
+config SOC_FLASH_MSPM0
 	bool "MSPM0 Flash driver"
 	default y
-	depends on DT_HAS_TI_MSPM0_FLASH_ENABLED
+	depends on DT_HAS_TI_MSPM0_FLASH_CONTROLLER_ENABLED
 	help
 	  This option enables the TI MSPM0 Flash driver.

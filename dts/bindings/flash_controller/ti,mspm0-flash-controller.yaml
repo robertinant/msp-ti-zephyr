@@ -2,7 +2,3 @@ description: TI MSPM0 FLASH
 compatible: "ti,mspm0-flash-controller"
 
 include: flash-controller.yaml
-
-properties: 
-  reg:
-    required: true
