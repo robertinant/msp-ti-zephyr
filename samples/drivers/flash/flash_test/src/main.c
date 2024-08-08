@@ -12,12 +12,12 @@
 #include <zephyr/drivers/flash.h>
 
 /* 1000 msec = 1 sec */
-#define SLEEP_TIME_MS   1024
+#define SLEEP_TIME_MS   1000
 
 /* The devicetree node identifier for the "led0" alias. */
 #define LED0_NODE DT_ALIAS(led0)
 
-#define MAIN_BASE_ADDRESS (0x00020000)
+#define MAIN_BASE_ADDRESS (0x00018000)
 
 #define FLASH_0_NODE DT_NODELABEL(flashctl)
 
@@ -32,7 +32,7 @@ int main(void)
 {
 	int ret;
 	bool led_state = true;
-
+	uint32_t data[] = {0xDEADBEEF, 0xCAFEBABE};
 	if (!gpio_is_ready_dt(&led)) {
 		return 0;
 	}
@@ -41,7 +41,11 @@ int main(void)
 	if (ret < 0) {
 		return 0;
 	}
-	flash_erase(dev, MAIN_BASE_ADDRESS, 1000);
+	flash_write(dev, MAIN_BASE_ADDRESS, &data[0], 8);
+	data[0] = 0x0;
+	data[1] = 0x0;
+	flash_read(dev, MAIN_BASE_ADDRESS, &data[0], 8);
+	flash_erase(dev, MAIN_BASE_ADDRESS, 1024);
 	while (1) {
 		ret = gpio_pin_toggle_dt(&led);
 		if (ret < 0) {
