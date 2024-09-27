@@ -13,9 +13,17 @@
 
 &flashctl {
 	flash0: nv-flash@0 {
-		compatible = "ti,mspm0-nv-flash", "soc-nv-flash"; 
-		reg = <0x0 DT_SIZE_K(128)>;
+		/*
+		compatible = "ti,mspm0-nv-flash", "soc-nv-flash";
 		erase-block-size = <1024>;
 		write-block-size = <8>;
+		reg = <0x0 DT_SIZE_K(128)>;
+		*/
+		
+		compatible = "ti,mspm0-nv-flash", "soc-nv-flash";
+		erase-block-size = <1024>;
+		write-block-size = <8>;
+		reg = <0x0 DT_SIZE_K(128)>;
+		
 	};
 };

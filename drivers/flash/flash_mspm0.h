@@ -69,10 +69,6 @@ int flash_mspm0_write_range(const struct device *dev, unsigned int offset, const
 
 int flash_mspm0_block_erase_loop(const struct device *dev, unsigned int offset, unsigned int len);
 
-int flash_mspm0_wait_flash_idle(const struct device *dev);
-
-static int flash_mspm0_check_status(const struct device *dev);
-
 static int flash_mspm0_erase(const struct device *dev, off_t offset, size_t len);
 int flash_mspm0_block_erase_loop(const struct device *dev,
 				 unsigned int offset,
