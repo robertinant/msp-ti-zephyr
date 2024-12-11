@@ -26,7 +26,6 @@ description: |
     - bias-pull-up: Enable pull-up resistor.
     - drive-open-drain: Output driver is open-drain.
     - drive-open-drain: Output driver is open-source.
-    - drive-strength: Maximum current that can be sourced from the pin.
     - input-enable: enable input.
     - ti,invert: enable logical inversion of a digital input or output
     - ti,hysteresis: enable hysteresis control on open-drain pins
@@ -87,7 +86,6 @@ child-binding:
         - bias-high-impedance
         - drive-open-drain
         - drive-open-source
-        - drive-strength
         - input-enable
 
   properties:

@@ -41,7 +41,7 @@
 		led3: led_1 {
 			gpios = <&gpioa 0 GPIO_ACTIVE_LOW>;
 			label = "Red LED";
-		}
+		};
 	};
 
 	keys {

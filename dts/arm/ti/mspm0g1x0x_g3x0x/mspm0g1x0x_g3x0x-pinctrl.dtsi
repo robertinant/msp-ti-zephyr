@@ -80,12 +80,12 @@
 
 	/omit-if-no-ref/ uart0_tx_pa10: uart_tx_pa10 {
 		pinmux = <MSP_PINMUX(21,MSPM0_PIN_FUNCTION_2)>;
-		drive-strength = <20>;
+		drive-strength = "high";
 	};
 
 	/omit-if-no-ref/ uart0_rx_pa11: uart_rx_pa11 {
 		pinmux = <MSP_PINMUX(22,MSPM0_PIN_FUNCTION_2)>;
-		drive-strength = <20>;
+		drive-strength = "high";
 		input-enable;
 	};
 
