@@ -1,0 +1,18 @@
+# Copyright (c) 2024 Texas Instruments
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_SERIES_MSPM0GX51X
+	bool
+	select SOC_FAMILY_TI_MSPM0
+	help
+	  Enable support for TI MSPM0GX51X SoCs
+
+config SOC_MSPM0G3519
+	bool
+	select SOC_SERIES_MSPM0GX51X
+
+config SOC_SERIES
+	default "mspm0gx51x" if SOC_SERIES_MSPM0GX51X
+
+config SOC
+	default "mspm0g3519" if SOC_MSPM0G3519

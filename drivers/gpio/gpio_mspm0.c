@@ -19,7 +19,7 @@
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(gpioa), okay)
 #define GPIOA_NODE DT_NODELABEL(gpioa)
 
-#ifdef CONFIG_SOC_SERIES_MSPM0G1X0X_G3X0X
+#if defined(CONFIG_SOC_SERIES_MSPM0G1X0X_G3X0X) || defined(CONFIG_SOC_SERIES_MSPM0GX51X)
 #define NUM_GPIOA_PIN 32
 #define gpioa_pins    NUM_GPIOA_PIN
 static uint32_t gpioa_pincm_lut[NUM_GPIOA_PIN] = {
@@ -32,13 +32,13 @@ static uint32_t gpioa_pincm_lut[NUM_GPIOA_PIN] = {
 };
 #else
 #throw "series lookup table not supported"
-#endif /* if config SOC_SERIES_MSPM0G1X0X_G3X0X */
+#endif /* if config SOC_SERIES */
 
 #endif /* DT_NODE_HAS_STATUS(DT_NODELABEL(gpioa), okay) */
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(gpiob), okay)
 #define GPIOB_NODE DT_NODELABEL(gpiob)
-#ifdef CONFIG_SOC_SERIES_MSPM0G1X0X_G3X0X
+#if defined(CONFIG_SOC_SERIES_MSPM0G1X0X_G3X0X) || defined(CONFIG_SOC_SERIES_MSPM0GX51X)
 #define NUM_GPIOB_PIN 28
 #define gpiob_pins    NUM_GPIOB_PIN
 static uint32_t gpiob_pincm_lut[NUM_GPIOB_PIN] = {
